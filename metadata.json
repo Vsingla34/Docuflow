@@ -1,0 +1,5 @@
+{
+  "name": "Document Compliance Manager",
+  "description": "A desktop-style application to manage documents and request them from clients for various compliances. Streamline your workflow, track requests, and maintain a centralized document repository.",
+  "requestFramePermissions": []
+}
