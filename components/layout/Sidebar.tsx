@@ -33,7 +33,7 @@ const Sidebar: React.FC<{ currentPage: PageKey; setCurrentPage: (page: PageKey) 
                         currentPage === item.key ? 'bg-primary text-white font-medium' : 'text-slate-300 hover:bg-sidebar-hover hover:text-white'
                       }`}
                     >
-                      <Icon name={item.icon as any} className="w-4.5 h-4.5 shrink-0" />
+                      <Icon name={item.icon as any} className="w-5 h-5 shrink-0" />
                       <span className="truncate">{item.label}</span>
                     </button>
                   </li>
