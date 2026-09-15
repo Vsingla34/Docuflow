@@ -1,5 +1,5 @@
 {
-  "name": "Document Compliance Manager",
-  "description": "A desktop-style application to manage documents and request them from clients for various compliances. Streamline your workflow, track requests, and maintain a centralized document repository.",
+  "name": "Asset Lifecycle Manager",
+  "description": "End-to-end asset lifecycle management for a company: purchase requisitions, purchase orders, GRN, transfers, gate passes, AMC, repairs, replacements, disposal/sale, physical audits and a full delegation-of-authority approval matrix.",
   "requestFramePermissions": []
 }
