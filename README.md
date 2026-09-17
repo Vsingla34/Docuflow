@@ -1,20 +1,30 @@
-<div align="center">
-<img width="1200" height="475" alt="GHBanner" src="https://github.com/user-attachments/assets/0aa67016-6eaf-458a-adb2-6e31a0763ed6" />
-</div>
+# Asset Lifecycle Manager
 
-# Run and deploy your AI Studio app
+A single-page application that manages the complete lifecycle of company
+assets — from requisition through purchase, receipt, deployment, movement,
+maintenance, and final disposal — with a configurable Delegation of
+Authority (DOA) approval matrix at every step.
 
-This contains everything you need to run your app locally.
+## Covers
 
-View your app in AI Studio: https://ai.studio/apps/drive/1aFLyu5WV6FEpaMZznY0XdEwmYX4r8In5
+- **Procurement**: Purchase Requisition → Purchase Order → Goods Receipt Note (GRN), with GRN automatically registering serialised assets into the register.
+- **Asset Register**: categories, variants (models/configurations) and components (sub-parts), full history timeline, and SLM/WDV depreciation.
+- **Movement**: custodian issue, department/location transfers and inter-branch transfers, with acknowledgement on receipt.
+- **Gate Pass**: returnable/non-returnable outward passes for repairs, demos, WFH, sale handover, or scrap — with due-date tracking for returnables.
+- **Maintenance**: AMC contracts (with visit schedules and renewal reminders) and repair/service tickets, linked to warranty/AMC coverage.
+- **Replacement**: retiring an asset and issuing a replacement, with disposition of the old unit.
+- **Disposal**: sale, scrap, donation, write-off, buyback and trade-in, with gain/loss against book value.
+- **Audit**: physical verification plans/cycles with per-asset findings and sign-off, plus a running activity log.
+- **DOA**: a configurable authority matrix (role, value band, category/location scope) that builds each document's approval chain automatically, plus temporary delegation of signing authority.
+- **Roles**: Employee, Admin, Management, Auditor — navigation and actions are scoped by role.
 
-## Run Locally
+## Run locally
 
-**Prerequisites:**  Node.js
+**Prerequisites:** Node.js
 
+1. Install dependencies: `npm install`
+2. Run the app: `npm run dev`
+3. Build for production: `npm run build`
 
-1. Install dependencies:
-   `npm install`
-2. Set the `GEMINI_API_KEY` in [.env.local](.env.local) to your Gemini API key
-3. Run the app:
-   `npm run dev`
+All data is seeded with a realistic demo dataset and persisted to
+`localStorage` in the browser — there is no backend.
