@@ -1,12 +1,13 @@
 import React, { useState } from 'react';
 import { useAssetStore } from '../store/AssetStore';
-import { AmcContract, AmcType, ApprovalDocType, ApprovalStatus, DocStatus, PaymentFrequency } from '../types';
+import { AmcContract, AmcType, ApprovalDocType, ApprovalStatus, DocStatus, DocumentEntityType, PaymentFrequency, UserRole } from '../types';
 import { ListToolbar, TableCard, THead, Tr, Td, FilterSelect } from '../components/ui/Table';
 import { Pill, StatusBadge } from '../components/ui/Badge';
 import { Drawer, Modal } from '../components/ui/Overlay';
 import { Field, Input, Select, TextArea, PrimaryButton, SecondaryButton } from '../components/ui/FormControls';
 import { EmptyState } from '../components/ui/EmptyState';
 import ApprovalChain from '../components/ui/ApprovalChain';
+import DocumentsPanel from '../components/ui/DocumentsPanel';
 import Icon from '../components/icons/Icon';
 import { formatCurrency, formatDate, daysFromToday, today } from '../lib/format';
 import { useToast } from '../components/ui/Toast';
@@ -116,6 +117,15 @@ const Amc: React.FC = () => {
             {selectedLive.status === DocStatus.Active && !amcContracts.some(c => c.renewedFromId === selectedLive.id) && (
               <SecondaryButton icon={<Icon name="history" className="w-4 h-4" />} onClick={() => setRenewOpen(true)}>Draft Renewal</SecondaryButton>
             )}
+            <section>
+              <h3 className="text-sm font-semibold mb-2">Documents</h3>
+              <DocumentsPanel
+                entityType={DocumentEntityType.AmcContract}
+                entityId={selectedLive.id}
+                entityLabel={selectedLive.contractNo}
+                canEdit={currentUser.role === UserRole.ADMIN || currentUser.role === UserRole.MANAGEMENT}
+              />
+            </section>
           </>
         )}
       </Drawer>

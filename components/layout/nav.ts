@@ -18,7 +18,9 @@ export type PageKey =
   | 'doa'
   | 'masters'
   | 'employees'
-  | 'activity';
+  | 'activity'
+  | 'reports'
+  | 'documents';
 
 export interface NavItem {
   key: PageKey;
@@ -80,6 +82,13 @@ export const NAV_SECTIONS: NavSection[] = [
     ],
   },
   {
+    title: 'Reports & Documents',
+    items: [
+      { key: 'reports', label: 'Reports', icon: 'spark', roles: [UserRole.ADMIN, UserRole.MANAGEMENT, UserRole.AUDITOR] },
+      { key: 'documents', label: 'Document Library', icon: 'clipboard', roles: [UserRole.ADMIN, UserRole.MANAGEMENT, UserRole.AUDITOR] },
+    ],
+  },
+  {
     title: 'Organisation',
     items: [
       { key: 'masters', label: 'Locations, Depts & Vendors', icon: 'building', roles: [UserRole.ADMIN] },
@@ -106,4 +115,6 @@ export const PAGE_TITLES: Record<PageKey, string> = {
   masters: 'Locations, Departments & Vendors',
   employees: 'Employees & User Access',
   activity: 'Activity Log',
+  reports: 'Reports',
+  documents: 'Document Library',
 };

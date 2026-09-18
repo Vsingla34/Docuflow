@@ -1,7 +1,7 @@
 import React, { useMemo, useState } from 'react';
 import { useAssetStore } from '../store/AssetStore';
 import {
-  Asset, AssetCondition, AssetStatus, ComponentStatus, Criticality, DocStatus, UserRole,
+  Asset, AssetCondition, AssetStatus, ComponentStatus, Criticality, DocStatus, DocumentEntityType, UserRole,
 } from '../types';
 import { ListToolbar, SearchInput, FilterSelect, TableCard, THead, Tr, Td } from '../components/ui/Table';
 import { AssetStatusBadge, ConditionBadge, CriticalityBadge, Pill } from '../components/ui/Badge';
@@ -9,9 +9,13 @@ import { Drawer, Modal } from '../components/ui/Overlay';
 import { EmptyState } from '../components/ui/EmptyState';
 import { Field, Input, Select, PrimaryButton, SecondaryButton, TextArea } from '../components/ui/FormControls';
 import Timeline from '../components/ui/Timeline';
+import { Tabs } from '../components/ui/Tabs';
+import DocumentsPanel from '../components/ui/DocumentsPanel';
 import Icon from '../components/icons/Icon';
 import { formatCurrency, formatDate, today } from '../lib/format';
 import { computeDepreciation } from '../lib/depreciation';
+import { exportToCsv } from '../lib/csv';
+import { exportTableToPdf } from '../lib/pdf';
 import { PageKey } from '../components/layout/nav';
 import { useToast } from '../components/ui/Toast';
 
@@ -25,10 +29,12 @@ const AssetRegister: React.FC<{ onNavigate: (page: PageKey) => void }> = ({ onNa
   const [categoryFilter, setCategoryFilter] = useState('all');
   const [locationFilter, setLocationFilter] = useState('all');
   const [selected, setSelected] = useState<Asset | null>(null);
+  const [tab, setTab] = useState('overview');
   const [editOpen, setEditOpen] = useState(false);
   const [componentOpen, setComponentOpen] = useState(false);
 
   const canEdit = currentUser.role === UserRole.ADMIN || currentUser.role === UserRole.MANAGEMENT;
+  const openAsset = (a: Asset) => { setSelected(a); setTab('overview'); };
 
   const scoped = useMemo(() => {
     if (currentUser.role !== UserRole.EMPLOYEE || !me) return assets;
@@ -65,6 +71,19 @@ const AssetRegister: React.FC<{ onNavigate: (page: PageKey) => void }> = ({ onNa
   const depreciation = selected ? computeDepreciation(selected) : null;
   const assetComponents = selected ? components.filter(c => c.assetId === selected.id) : [];
 
+  const exportColumns = [
+    { header: 'Tag', value: (a: Asset) => a.assetTag },
+    { header: 'Name', value: (a: Asset) => a.name },
+    { header: 'Serial No.', value: (a: Asset) => a.serialNumber },
+    { header: 'Category', value: (a: Asset) => nameOf(a.categoryId, categories) },
+    { header: 'Custodian', value: (a: Asset) => empName(a.custodianId) },
+    { header: 'Location', value: (a: Asset) => nameOf(a.locationId, locations) },
+    { header: 'Status', value: (a: Asset) => a.status },
+    { header: 'Condition', value: (a: Asset) => a.condition },
+    { header: 'Purchase Cost', value: (a: Asset) => a.purchaseCost },
+    { header: 'Book Value', value: (a: Asset) => Math.round(computeDepreciation(a).netBookValue) },
+  ];
+
   return (
     <div>
       <ListToolbar title="Asset Register" count={filtered.length}>
@@ -72,6 +91,8 @@ const AssetRegister: React.FC<{ onNavigate: (page: PageKey) => void }> = ({ onNa
         <FilterSelect value={statusFilter} onChange={setStatusFilter} options={[{ value: 'all', label: 'All statuses' }, ...Object.values(AssetStatus).map(s => ({ value: s, label: s }))]} />
         <FilterSelect value={categoryFilter} onChange={setCategoryFilter} options={[{ value: 'all', label: 'All categories' }, ...categories.map(c => ({ value: c.id, label: c.name }))]} />
         <FilterSelect value={locationFilter} onChange={setLocationFilter} options={[{ value: 'all', label: 'All locations' }, ...locations.map(l => ({ value: l.id, label: l.name }))]} />
+        <SecondaryButton icon={<Icon name="download" className="w-4 h-4" />} onClick={() => exportToCsv('asset-register', exportColumns, filtered)}>CSV</SecondaryButton>
+        <SecondaryButton icon={<Icon name="download" className="w-4 h-4" />} onClick={() => exportTableToPdf('asset-register', 'Asset Register', exportColumns.map(c => ({ header: c.header, value: (a: Asset) => String(c.value(a)) })), filtered)}>PDF</SecondaryButton>
       </ListToolbar>
 
       {filtered.length === 0 ? (
@@ -81,7 +102,7 @@ const AssetRegister: React.FC<{ onNavigate: (page: PageKey) => void }> = ({ onNa
           <THead columns={['Tag', 'Asset', 'Category', 'Custodian', 'Location', 'Status', 'Condition', 'Book Value']} />
           <tbody>
             {filtered.map(a => (
-              <Tr key={a.id} onClick={() => setSelected(a)}>
+              <Tr key={a.id} onClick={() => openAsset(a)}>
                 <Td className="font-mono text-xs">{a.assetTag}</Td>
                 <Td>
                   <p className="font-medium text-text-main">{a.name}</p>
@@ -128,46 +149,76 @@ const AssetRegister: React.FC<{ onNavigate: (page: PageKey) => void }> = ({ onNa
               </div>
             )}
 
-            <section>
-              <h3 className="text-sm font-semibold text-text-main mb-2">Details</h3>
-              <dl className="grid grid-cols-2 gap-x-4 gap-y-2 text-sm">
-                <InfoRow label="Category" value={nameOf(selected.categoryId, categories)} />
-                <InfoRow label="Custodian" value={empName(selected.custodianId)} />
-                <InfoRow label="Department" value={nameOf(selected.departmentId, departments)} />
-                <InfoRow label="Location" value={nameOf(selected.locationId, locations) + (selected.subLocation ? ` (${selected.subLocation})` : '')} />
-                <InfoRow label="Vendor" value={nameOf(selected.vendorId, vendors)} />
-                <InfoRow label="PO / GRN" value={`${selected.poNo || '—'} / ${selected.grnNo || '—'}`} />
-                <InfoRow label="Purchase Date" value={formatDate(selected.purchaseDate)} />
-                <InfoRow label="Warranty Expiry" value={formatDate(selected.warrantyExpiry)} />
-                {selected.insuranceExpiry && <InfoRow label="Insurance Expiry" value={formatDate(selected.insuranceExpiry)} />}
-                <InfoRow label="Last Verified" value={selected.lastVerifiedOn ? `${formatDate(selected.lastVerifiedOn)} by ${selected.lastVerifiedBy}` : 'Not yet verified'} />
-              </dl>
-            </section>
+            <Tabs
+              active={tab}
+              onChange={setTab}
+              items={[
+                { key: 'overview', label: 'Overview' },
+                { key: 'financials', label: 'Financials' },
+                { key: 'components', label: 'Components', count: assetComponents.length },
+                { key: 'documents', label: 'Documents', count: state.documents.filter(d => d.entityType === DocumentEntityType.Asset && d.entityId === selected.id).length },
+                { key: 'history', label: 'History', count: selected.history.length },
+              ]}
+            />
 
-            <section>
-              <h3 className="text-sm font-semibold text-text-main mb-2">Financials</h3>
-              <dl className="grid grid-cols-2 gap-x-4 gap-y-2 text-sm">
-                <InfoRow label="Purchase Cost" value={formatCurrency(depreciation.cost)} />
-                <InfoRow label="Depreciation Method" value={selected.depreciationMethod} />
-                <InfoRow label="Accumulated Depreciation" value={formatCurrency(depreciation.accumulated)} />
-                <InfoRow label="Net Book Value" value={formatCurrency(depreciation.netBookValue)} />
-                <InfoRow label="% Depreciated" value={`${depreciation.percentDepreciated}%`} />
-                <InfoRow label="Useful Life" value={`${selected.usefulLifeYears} years`} />
-              </dl>
-            </section>
-
-            {selected.disposal && (
-              <section className="rounded-lg bg-slate-50 border border-border p-3">
-                <h3 className="text-sm font-semibold text-text-main mb-1">Disposal</h3>
-                <p className="text-sm text-text-light">{selected.disposal.mode} on {formatDate(selected.disposal.date)} · Realised {formatCurrency(selected.disposal.realisedValue)} · Ref {selected.disposal.refNo}</p>
+            {tab === 'overview' && (
+              <section>
+                <dl className="grid grid-cols-2 gap-x-4 gap-y-2 text-sm">
+                  <InfoRow label="Category" value={nameOf(selected.categoryId, categories)} />
+                  <InfoRow label="Custodian" value={empName(selected.custodianId)} />
+                  <InfoRow label="Department" value={nameOf(selected.departmentId, departments)} />
+                  <InfoRow label="Location" value={nameOf(selected.locationId, locations) + (selected.subLocation ? ` (${selected.subLocation})` : '')} />
+                  <InfoRow label="Vendor" value={nameOf(selected.vendorId, vendors)} />
+                  <InfoRow label="PO / GRN" value={`${selected.poNo || '—'} / ${selected.grnNo || '—'}`} />
+                  <InfoRow label="Purchase Date" value={formatDate(selected.purchaseDate)} />
+                  <InfoRow label="Warranty Expiry" value={formatDate(selected.warrantyExpiry)} />
+                  {selected.insuranceExpiry && <InfoRow label="Insurance Expiry" value={formatDate(selected.insuranceExpiry)} />}
+                  <InfoRow label="Last Verified" value={selected.lastVerifiedOn ? `${formatDate(selected.lastVerifiedOn)} by ${selected.lastVerifiedBy}` : 'Not yet verified'} />
+                </dl>
+                {selected.disposal && (
+                  <div className="rounded-lg bg-slate-50 border border-border p-3 mt-4">
+                    <h3 className="text-sm font-semibold text-text-main mb-1">Disposal</h3>
+                    <p className="text-sm text-text-light">{selected.disposal.mode} on {formatDate(selected.disposal.date)} · Realised {formatCurrency(selected.disposal.realisedValue)} · Ref {selected.disposal.refNo}</p>
+                  </div>
+                )}
               </section>
             )}
 
-            <section>
-              <div className="flex items-center justify-between mb-2">
-                <h3 className="text-sm font-semibold text-text-main">Components</h3>
-              </div>
-              {assetComponents.length === 0 ? (
+            {tab === 'financials' && (
+              <section>
+                <dl className="grid grid-cols-2 gap-x-4 gap-y-2 text-sm">
+                  <InfoRow label="Purchase Cost" value={formatCurrency(depreciation.cost)} />
+                  <InfoRow label="Depreciation Method" value={selected.depreciationMethod} />
+                  <InfoRow label="Accumulated Depreciation" value={formatCurrency(depreciation.accumulated)} />
+                  <InfoRow label="Net Book Value" value={formatCurrency(depreciation.netBookValue)} />
+                  <InfoRow label="% Depreciated" value={`${depreciation.percentDepreciated}%`} />
+                  <InfoRow label="Useful Life" value={`${selected.usefulLifeYears} years`} />
+                </dl>
+                {depreciation.schedule.length > 0 && (
+                  <div className="mt-4">
+                    <h3 className="text-sm font-semibold text-text-main mb-2">Depreciation Schedule</h3>
+                    <div className="border border-border rounded-lg overflow-hidden">
+                      <table className="w-full text-sm">
+                        <THead columns={['Year', 'Opening', 'Charge', 'Closing']} />
+                        <tbody>
+                          {depreciation.schedule.map(row => (
+                            <Tr key={row.year}>
+                              <Td>{row.label} ({row.year})</Td>
+                              <Td>{formatCurrency(row.openingValue)}</Td>
+                              <Td>{formatCurrency(row.charge)}</Td>
+                              <Td>{formatCurrency(row.closingValue)}</Td>
+                            </Tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                )}
+              </section>
+            )}
+
+            {tab === 'components' && (
+              assetComponents.length === 0 ? (
                 <p className="text-sm text-text-light">No components tracked for this asset.</p>
               ) : (
                 <div className="space-y-2">
@@ -182,13 +233,14 @@ const AssetRegister: React.FC<{ onNavigate: (page: PageKey) => void }> = ({ onNa
                     </div>
                   ))}
                 </div>
-              )}
-            </section>
+              )
+            )}
 
-            <section>
-              <h3 className="text-sm font-semibold text-text-main mb-3">History</h3>
-              <Timeline events={selected.history} />
-            </section>
+            {tab === 'documents' && (
+              <DocumentsPanel entityType={DocumentEntityType.Asset} entityId={selected.id} entityLabel={`${selected.assetTag} · ${selected.name}`} canEdit={canEdit} />
+            )}
+
+            {tab === 'history' && <Timeline events={selected.history} />}
           </>
         )}
       </Drawer>

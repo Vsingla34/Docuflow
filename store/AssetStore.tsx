@@ -14,6 +14,7 @@ import {
   AssetLocation,
   AssetState,
   AssetStatus,
+  AssetDocument,
   AssetVariant,
   AuditPlan,
   ComponentStatus,
@@ -173,6 +174,10 @@ interface AssetContextValue {
   createAuditPlan: (draft: Omit<AuditPlan, 'id' | 'auditNo' | 'status' | 'lines' | 'createdOn'>) => string;
   recordVerification: (auditId: string, line: VerificationLine) => void;
   signOffAudit: (auditId: string, observations: string) => void;
+
+  // Documents
+  uploadDocument: (draft: Omit<AssetDocument, 'id' | 'uploadedBy' | 'uploadedOn'>) => void;
+  deleteDocument: (id: string) => void;
 }
 
 const AssetContext = createContext<AssetContextValue | null>(null);
@@ -897,6 +902,18 @@ export const AssetStoreProvider: React.FC<{ children: React.ReactNode }> = ({ ch
     log({ actor: actorName, actorRole, action: 'Audit signed off', entityType: 'AuditPlan', entityId: auditId, summary: observations.slice(0, 120), severity: 'info' });
   }, [setState, log, actorName, actorRole]);
 
+  // -- Documents (file attachments) ---------------------------------------------
+
+  const uploadDocument = useCallback((draft: Omit<AssetDocument, 'id' | 'uploadedBy' | 'uploadedOn'>) => {
+    const row: AssetDocument = { ...draft, id: uid('doc'), uploadedBy: actorName, uploadedOn: today() };
+    setState(prev => ({ ...prev, documents: [row, ...prev.documents] }));
+    log({ actor: actorName, actorRole, action: 'Document uploaded', entityType: draft.entityType, entityId: draft.entityId, entityNo: draft.entityLabel, summary: `Attached "${draft.fileName}" (${draft.category}).`, severity: 'info' });
+  }, [setState, log, actorName, actorRole]);
+
+  const deleteDocument = useCallback((id: string) => {
+    setState(prev => ({ ...prev, documents: prev.documents.filter(d => d.id !== id) }));
+  }, [setState]);
+
   const value: AssetContextValue = {
     state, currentUser, users, setCurrentUser, me,
     saveCategory, saveVariant, saveLocation, saveDepartment, saveVendor, saveEmployee,
@@ -911,6 +928,7 @@ export const AssetStoreProvider: React.FC<{ children: React.ReactNode }> = ({ ch
     createDisposal, actOnDisposal, completeDisposal,
     saveDoaRule, toggleDoaRule, saveDelegation, toggleDelegation,
     createAuditPlan, recordVerification, signOffAudit,
+    uploadDocument, deleteDocument,
   };
 
   return <AssetContext.Provider value={value}>{children}</AssetContext.Provider>;

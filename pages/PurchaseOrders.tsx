@@ -1,12 +1,13 @@
 import React, { useState } from 'react';
 import { useAssetStore } from '../store/AssetStore';
-import { ApprovalDocType, ApprovalStatus, DocStatus, PurchaseOrder, PurchaseOrderLine } from '../types';
+import { ApprovalDocType, ApprovalStatus, DocStatus, DocumentEntityType, PurchaseOrder, PurchaseOrderLine, UserRole } from '../types';
 import { ListToolbar, TableCard, THead, Tr, Td, FilterSelect } from '../components/ui/Table';
 import { StatusBadge } from '../components/ui/Badge';
 import { Drawer, Modal } from '../components/ui/Overlay';
 import { Field, Input, Select, TextArea, PrimaryButton, SecondaryButton } from '../components/ui/FormControls';
 import { EmptyState } from '../components/ui/EmptyState';
 import ApprovalChain from '../components/ui/ApprovalChain';
+import DocumentsPanel from '../components/ui/DocumentsPanel';
 import Icon from '../components/icons/Icon';
 import { formatCurrency, formatDate, today, uid } from '../lib/format';
 import { useToast } from '../components/ui/Toast';
@@ -100,6 +101,15 @@ const PurchaseOrders: React.FC<{ onNavigate: (page: PageKey) => void }> = ({ onN
             {[DocStatus.Approved, DocStatus.PartiallyReceived].includes(selectedLive.status) && selectedLive.lines.some(l => l.receivedQty < l.quantity) && (
               <button onClick={() => onNavigate('grns')} className="text-primary text-sm font-semibold hover:underline">Record goods receipt (GRN) →</button>
             )}
+            <section>
+              <h3 className="text-sm font-semibold mb-2">Documents</h3>
+              <DocumentsPanel
+                entityType={DocumentEntityType.PurchaseOrder}
+                entityId={selectedLive.id}
+                entityLabel={selectedLive.poNo}
+                canEdit={currentUser.role === UserRole.ADMIN || currentUser.role === UserRole.MANAGEMENT}
+              />
+            </section>
           </>
         )}
       </Drawer>

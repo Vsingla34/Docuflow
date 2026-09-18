@@ -1,12 +1,13 @@
 import React, { useMemo, useState } from 'react';
 import { useAssetStore } from '../store/AssetStore';
-import { ApprovalDocType, ApprovalStatus, AssetStatus, DocStatus, GatePass, GatePassPurpose, GatePassType } from '../types';
+import { ApprovalDocType, ApprovalStatus, AssetStatus, DocStatus, DocumentEntityType, GatePass, GatePassPurpose, GatePassType } from '../types';
 import { ListToolbar, TableCard, THead, Tr, Td, FilterSelect } from '../components/ui/Table';
 import { Pill, StatusBadge } from '../components/ui/Badge';
 import { Drawer, Modal } from '../components/ui/Overlay';
 import { Field, Input, Select, TextArea, PrimaryButton } from '../components/ui/FormControls';
 import { EmptyState } from '../components/ui/EmptyState';
 import ApprovalChain from '../components/ui/ApprovalChain';
+import DocumentsPanel from '../components/ui/DocumentsPanel';
 import Icon from '../components/icons/Icon';
 import { formatCurrency, formatDate, daysFromToday, today } from '../lib/format';
 import { useToast } from '../components/ui/Toast';
@@ -100,6 +101,15 @@ const GatePasses: React.FC = () => {
                 Mark Returned
               </PrimaryButton>
             )}
+            <section>
+              <h3 className="text-sm font-semibold mb-2">Documents</h3>
+              <DocumentsPanel
+                entityType={DocumentEntityType.GatePass}
+                entityId={selectedLive.id}
+                entityLabel={selectedLive.gatePassNo}
+                canEdit
+              />
+            </section>
           </>
         )}
       </Drawer>

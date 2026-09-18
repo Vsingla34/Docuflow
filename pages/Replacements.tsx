@@ -1,12 +1,13 @@
 import React, { useState } from 'react';
 import { useAssetStore } from '../store/AssetStore';
-import { ApprovalDocType, ApprovalStatus, AssetStatus, DocStatus, Replacement, ReplacementReason } from '../types';
+import { ApprovalDocType, ApprovalStatus, AssetStatus, DocStatus, DocumentEntityType, Replacement, ReplacementReason } from '../types';
 import { ListToolbar, TableCard, THead, Tr, Td, FilterSelect } from '../components/ui/Table';
 import { StatusBadge } from '../components/ui/Badge';
 import { Drawer, Modal } from '../components/ui/Overlay';
 import { Field, Input, Select, TextArea, PrimaryButton } from '../components/ui/FormControls';
 import { EmptyState } from '../components/ui/EmptyState';
 import ApprovalChain from '../components/ui/ApprovalChain';
+import DocumentsPanel from '../components/ui/DocumentsPanel';
 import Icon from '../components/icons/Icon';
 import { formatCurrency, formatDate, today } from '../lib/format';
 import { useToast } from '../components/ui/Toast';
@@ -84,6 +85,15 @@ const Replacements: React.FC = () => {
             {selectedLive.status === DocStatus.Approved && (
               <PrimaryButton icon={<Icon name="check" className="w-4 h-4" />} onClick={() => setCompleteOpen(true)}>Complete Replacement</PrimaryButton>
             )}
+            <section>
+              <h3 className="text-sm font-semibold mb-2">Documents</h3>
+              <DocumentsPanel
+                entityType={DocumentEntityType.Replacement}
+                entityId={selectedLive.id}
+                entityLabel={selectedLive.replacementNo}
+                canEdit
+              />
+            </section>
           </>
         )}
       </Drawer>
