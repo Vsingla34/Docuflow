@@ -1,12 +1,13 @@
 import React, { useState } from 'react';
 import { useAssetStore } from '../store/AssetStore';
-import { ApprovalDocType, ApprovalStatus, DocStatus, Requisition, RequisitionLine, UserRole } from '../types';
+import { ApprovalDocType, ApprovalStatus, DocStatus, DocumentEntityType, Requisition, RequisitionLine, UserRole } from '../types';
 import { ListToolbar, TableCard, THead, Tr, Td, FilterSelect } from '../components/ui/Table';
 import { StatusBadge } from '../components/ui/Badge';
 import { Drawer, Modal } from '../components/ui/Overlay';
 import { Field, Input, Select, TextArea, PrimaryButton, SecondaryButton } from '../components/ui/FormControls';
 import { EmptyState } from '../components/ui/EmptyState';
 import ApprovalChain from '../components/ui/ApprovalChain';
+import DocumentsPanel from '../components/ui/DocumentsPanel';
 import Icon from '../components/icons/Icon';
 import { formatCurrency, formatDate, today, uid } from '../lib/format';
 import { useToast } from '../components/ui/Toast';
@@ -32,7 +33,9 @@ const Requisitions: React.FC<{ onNavigate: (page: PageKey) => void }> = ({ onNav
     <div>
       <ListToolbar title="Purchase Requisitions" count={filtered.length}>
         <FilterSelect value={statusFilter} onChange={setStatusFilter} options={[{ value: 'all', label: 'All statuses' }, ...Object.values(DocStatus).filter(s => requisitions.some(r => r.status === s)).map(s => ({ value: s, label: s }))]} />
-        <PrimaryButton icon={<Icon name="plus" className="w-4 h-4" />} onClick={() => setNewOpen(true)}>New Requisition</PrimaryButton>
+        {currentUser.role !== UserRole.AUDITOR && (
+          <PrimaryButton icon={<Icon name="plus" className="w-4 h-4" />} onClick={() => setNewOpen(true)}>New Requisition</PrimaryButton>
+        )}
       </ListToolbar>
 
       {filtered.length === 0 ? <EmptyState icon="clipboard" title="No requisitions" /> : (
@@ -103,6 +106,15 @@ const Requisitions: React.FC<{ onNavigate: (page: PageKey) => void }> = ({ onNav
                 View Purchase Order {selectedLive.poNo} →
               </button>
             )}
+            <section>
+              <h3 className="text-sm font-semibold mb-2">Documents</h3>
+              <DocumentsPanel
+                entityType={DocumentEntityType.Requisition}
+                entityId={selectedLive.id}
+                entityLabel={selectedLive.prNo}
+                canEdit={currentUser.role === UserRole.ADMIN || currentUser.role === UserRole.MANAGEMENT || selectedLive.requestedById === me?.id}
+              />
+            </section>
           </>
         )}
       </Drawer>

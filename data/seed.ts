@@ -8,11 +8,14 @@ import {
   AssetCategory,
   AssetComponent,
   AssetCondition,
+  AssetDocument,
   AssetEventType,
   AssetLocation,
   AssetState,
   AssetStatus,
   ComponentStatus,
+  DocumentCategory,
+  DocumentEntityType,
   Criticality,
   Department,
   DepreciationMethod,
@@ -837,6 +840,50 @@ export const SEED_ACTIVITY: ActivityEntry[] = [
 ];
 
 // ---------------------------------------------------------------------------
+// Documents (file attachments) — a handful of realistic seeded attachments.
+// The data URLs are tiny placeholder files (a one-page PDF, a 1x1 PNG) so
+// "view/download" in the demo opens something real rather than a broken link.
+// ---------------------------------------------------------------------------
+
+const PLACEHOLDER_PDF =
+  'data:application/pdf;base64,JVBERi0xLjEKMSAwIG9iajw8L1R5cGUvQ2F0YWxvZy9QYWdlcyAyIDAgUj4+ZW5kb2JqCjIgMCBvYmo8PC9UeXBlL1BhZ2VzL0tpZHNbMyAwIFJdL0NvdW50IDE+PmVuZG9iagozIDAgb2JqPDwvVHlwZS9QYWdlL1BhcmVudCAyIDAgUi9NZWRpYUJveFswIDAgMzAwIDE1MF0vUmVzb3VyY2VzPDwvRm9udDw8L0YxIDQgMCBSPj4+Pi9Db250ZW50cyA1IDAgUj4+ZW5kb2JqCjQgMCBvYmo8PC9UeXBlL0ZvbnQvU3VidHlwZS9UeXBlMS9CYXNlRm9udC9IZWx2ZXRpY2E+PmVuZG9iago1IDAgb2JqPDwvTGVuZ3RoIDcwPj5zdHJlYW0KQlQgL0YxIDE0IFRmIDIwIDEwMCBUZCAoU2FtcGxlIHNjYW5uZWQgZG9jdW1lbnQgLSBkZW1vIHBsYWNlaG9sZGVyKSBUaiBFVAplbmRzdHJlYW0KZW5kb2JqCnhyZWYKMCA2CnRyYWlsZXI8PC9TaXplIDYvUm9vdCAxIDAgUj4+CnN0YXJ0eHJlZgowCiUlRU9G';
+const PLACEHOLDER_PNG =
+  'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=';
+
+export const SEED_DOCUMENTS: AssetDocument[] = [
+  {
+    id: 'doc-001', entityType: DocumentEntityType.Grn, entityId: 'grn-001', entityLabel: 'GRN/2026-27/0001',
+    category: DocumentCategory.Invoice, fileName: 'DELL-INV-99872.pdf', mimeType: 'application/pdf', sizeBytes: 8420,
+    dataUrl: PLACEHOLDER_PDF, uploadedBy: 'Kavita Desai', uploadedOn: '2026-09-04',
+  },
+  {
+    id: 'doc-002', entityType: DocumentEntityType.Asset, entityId: 'asset-001', entityLabel: 'ITL-HO-0001 · Dell Latitude 5440',
+    category: DocumentCategory.Warranty, fileName: 'warranty-card-dl5440-2301.png', mimeType: 'image/png', sizeBytes: 1240,
+    dataUrl: PLACEHOLDER_PNG, uploadedBy: 'Rohit Verma', uploadedOn: '2023-06-15', remarks: '3-year onsite warranty card, scanned at receipt.',
+  },
+  {
+    id: 'doc-003', entityType: DocumentEntityType.AmcContract, entityId: 'amc-001', entityLabel: 'AMC/2025-26/0001',
+    category: DocumentCategory.Contract, fileName: 'AMC-2025-26-0001-signed.pdf', mimeType: 'application/pdf', sizeBytes: 15600,
+    dataUrl: PLACEHOLDER_PDF, uploadedBy: 'Rohit Verma', uploadedOn: '2025-09-18', remarks: 'Countersigned contract with Dell Technologies India.',
+  },
+  {
+    id: 'doc-004', entityType: DocumentEntityType.ServiceTicket, entityId: 'svc-003', entityLabel: 'SRV/2025-26/0011',
+    category: DocumentCategory.Photo, fileName: 'ssd-failure-evidence.png', mimeType: 'image/png', sizeBytes: 980,
+    dataUrl: PLACEHOLDER_PNG, uploadedBy: 'Amit Kumar', uploadedOn: '2025-08-20', remarks: 'Diagnostic screenshot showing SSD not detected.',
+  },
+  {
+    id: 'doc-005', entityType: DocumentEntityType.Asset, entityId: 'asset-014', entityLabel: 'VEH-HO-0001 · Mahindra XUV700 AX7',
+    category: DocumentCategory.Compliance, fileName: 'RC-book-MA1XUV700HO0001.pdf', mimeType: 'application/pdf', sizeBytes: 22300,
+    dataUrl: PLACEHOLDER_PDF, uploadedBy: 'Rohit Verma', uploadedOn: '2022-09-06', remarks: 'Registration certificate (RC book).',
+  },
+  {
+    id: 'doc-006', entityType: DocumentEntityType.Disposal, entityId: 'dsp-001', entityLabel: 'DSP/2025-26/0001',
+    category: DocumentCategory.Correspondence, fileName: 'write-off-approval-note.pdf', mimeType: 'application/pdf', sizeBytes: 6100,
+    dataUrl: PLACEHOLDER_PDF, uploadedBy: 'Ananya Rao', uploadedOn: '2025-09-20', remarks: 'CFO sign-off note for the water-damage write-off.',
+  },
+];
+
+// ---------------------------------------------------------------------------
 // Counters (keeps live document/tag numbering continuing from seed data)
 // ---------------------------------------------------------------------------
 
@@ -893,6 +940,7 @@ export const buildSeedState = (): AssetState => ({
   doaRules: SEED_DOA_RULES,
   delegations: SEED_DELEGATIONS,
   auditPlans: SEED_AUDIT_PLANS,
+  documents: SEED_DOCUMENTS,
   activity: SEED_ACTIVITY,
   counters: SEED_COUNTERS,
 });

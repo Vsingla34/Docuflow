@@ -764,6 +764,54 @@ export interface ActivityEntry {
 }
 
 // ---------------------------------------------------------------------------
+// Documents (file attachments) — every transaction/master type they can
+// attach to, named exactly as it appears in the UI and in the document
+// library's "linked to" column.
+// ---------------------------------------------------------------------------
+
+export enum DocumentEntityType {
+  Asset = 'Asset',
+  Requisition = 'Requisition',
+  PurchaseOrder = 'Purchase Order',
+  Grn = 'GRN',
+  Transfer = 'Transfer',
+  GatePass = 'Gate Pass',
+  AmcContract = 'AMC Contract',
+  ServiceTicket = 'Service Ticket',
+  Replacement = 'Replacement',
+  Disposal = 'Disposal',
+  Vendor = 'Vendor',
+  Employee = 'Employee',
+}
+
+export enum DocumentCategory {
+  Invoice = 'Invoice',
+  Warranty = 'Warranty Card',
+  Contract = 'Contract',
+  Photo = 'Photo',
+  Compliance = 'Compliance / Certificate',
+  Correspondence = 'Correspondence',
+  Other = 'Other',
+}
+
+/** A file attached to any entity in the system. Stored inline (base64 data URL) since there is no backend. */
+export interface AssetDocument {
+  id: string;
+  entityType: DocumentEntityType;
+  entityId: string;
+  /** Denormalised label so the document library can show "linked to" without re-joining every collection. */
+  entityLabel: string;
+  category: DocumentCategory;
+  fileName: string;
+  mimeType: string;
+  sizeBytes: number;
+  dataUrl: string;
+  uploadedBy: string;
+  uploadedOn: string;
+  remarks?: string;
+}
+
+// ---------------------------------------------------------------------------
 // Root state
 // ---------------------------------------------------------------------------
 
@@ -788,6 +836,7 @@ export interface AssetState {
   doaRules: DoaRule[];
   delegations: DoaDelegation[];
   auditPlans: AuditPlan[];
+  documents: AssetDocument[];
   activity: ActivityEntry[];
   counters: Record<string, number>;
 }

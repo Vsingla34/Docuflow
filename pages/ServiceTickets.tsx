@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useAssetStore } from '../store/AssetStore';
 import {
-  ApprovalDocType, ApprovalStatus, AssetStatus, DocStatus, PartReplacement, ReplacementReason, ServiceTicket, TicketPriority, TicketType, UserRole,
+  ApprovalDocType, ApprovalStatus, AssetStatus, DocStatus, DocumentEntityType, PartReplacement, ReplacementReason, ServiceTicket, TicketPriority, TicketType, UserRole,
 } from '../types';
 import { ListToolbar, TableCard, THead, Tr, Td, FilterSelect } from '../components/ui/Table';
 import { Pill, StatusBadge } from '../components/ui/Badge';
@@ -9,6 +9,7 @@ import { Drawer, Modal } from '../components/ui/Overlay';
 import { Field, Input, Select, TextArea, Checkbox, PrimaryButton, SecondaryButton } from '../components/ui/FormControls';
 import { EmptyState } from '../components/ui/EmptyState';
 import ApprovalChain from '../components/ui/ApprovalChain';
+import DocumentsPanel from '../components/ui/DocumentsPanel';
 import Icon from '../components/icons/Icon';
 import { formatCurrency, formatDate, today, uid } from '../lib/format';
 import { useToast } from '../components/ui/Toast';
@@ -35,7 +36,9 @@ const ServiceTickets: React.FC<{ onNavigate: (page: PageKey) => void }> = ({ onN
     <div>
       <ListToolbar title="Repairs & Service Tickets" count={filtered.length}>
         <FilterSelect value={statusFilter} onChange={setStatusFilter} options={[{ value: 'all', label: 'All statuses' }, ...Object.values(DocStatus).filter(s => serviceTickets.some(t => t.status === s)).map(s => ({ value: s, label: s }))]} />
-        <PrimaryButton icon={<Icon name="plus" className="w-4 h-4" />} onClick={() => setNewOpen(true)}>Report Fault</PrimaryButton>
+        {currentUser.role !== UserRole.AUDITOR && (
+          <PrimaryButton icon={<Icon name="plus" className="w-4 h-4" />} onClick={() => setNewOpen(true)}>Report Fault</PrimaryButton>
+        )}
       </ListToolbar>
 
       {filtered.length === 0 ? <EmptyState icon="wrench" title="No service tickets" /> : (
@@ -108,10 +111,10 @@ const ServiceTickets: React.FC<{ onNavigate: (page: PageKey) => void }> = ({ onN
               />
             </section>
             <div className="flex flex-wrap gap-3">
-              {selectedLive.status === DocStatus.Open && (
+              {selectedLive.status === DocStatus.Open && (currentUser.role === UserRole.ADMIN || currentUser.role === UserRole.MANAGEMENT) && (
                 <PrimaryButton icon={<Icon name="wrench" className="w-4 h-4" />} onClick={() => { startServiceTicket(selectedLive.id); showToast('Ticket moved to in-progress.'); }}>Start Work</PrimaryButton>
               )}
-              {selectedLive.status === DocStatus.InProgress && (
+              {selectedLive.status === DocStatus.InProgress && (currentUser.role === UserRole.ADMIN || currentUser.role === UserRole.MANAGEMENT) && (
                 <PrimaryButton icon={<Icon name="check" className="w-4 h-4" />} onClick={() => setCloseOpen(true)}>Close Ticket</PrimaryButton>
               )}
               {selectedLive.status === DocStatus.Completed && selectedLive.recommendReplacement && !selectedLive.replacementNo && (
@@ -131,6 +134,15 @@ const ServiceTickets: React.FC<{ onNavigate: (page: PageKey) => void }> = ({ onN
                 </SecondaryButton>
               )}
             </div>
+            <section>
+              <h3 className="text-sm font-semibold mb-2">Documents</h3>
+              <DocumentsPanel
+                entityType={DocumentEntityType.ServiceTicket}
+                entityId={selectedLive.id}
+                entityLabel={selectedLive.ticketNo}
+                canEdit={currentUser.role !== UserRole.AUDITOR}
+              />
+            </section>
           </>
         )}
       </Drawer>

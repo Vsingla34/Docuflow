@@ -22,6 +22,8 @@ import Doa from './pages/Doa';
 import Masters from './pages/Masters';
 import Employees from './pages/Employees';
 import ActivityLog from './pages/ActivityLog';
+import Reports from './pages/Reports';
+import DocumentLibrary from './pages/DocumentLibrary';
 
 const PAGES: Record<PageKey, React.ComponentType<{ onNavigate: (page: PageKey) => void }>> = {
   dashboard: Dashboard,
@@ -41,6 +43,8 @@ const PAGES: Record<PageKey, React.ComponentType<{ onNavigate: (page: PageKey) =
   masters: Masters,
   employees: Employees,
   activity: ActivityLog,
+  reports: Reports,
+  documents: DocumentLibrary,
 };
 
 const Shell: React.FC = () => {

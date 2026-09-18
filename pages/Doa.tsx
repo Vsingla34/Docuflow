@@ -16,9 +16,10 @@ const emptyRule = (): DoaRule => ({
 });
 
 const Doa: React.FC = () => {
-  const { state, saveDoaRule, toggleDoaRule, saveDelegation, toggleDelegation } = useAssetStore();
+  const { state, currentUser, saveDoaRule, toggleDoaRule, saveDelegation, toggleDelegation } = useAssetStore();
   const showToast = useToast();
   const { doaRules, delegations, employees, categories, locations } = state;
+  const isAdmin = currentUser.role === UserRole.ADMIN;
 
   const [tab, setTab] = useState<'matrix' | 'delegations'>('matrix');
   const [ruleModal, setRuleModal] = useState<DoaRule | null>(null);
@@ -40,7 +41,10 @@ const Doa: React.FC = () => {
       {tab === 'matrix' ? (
         <>
           <ListToolbar title="Delegation of Authority Matrix" count={doaRules.length}>
-            <PrimaryButton icon={<Icon name="plus" className="w-4 h-4" />} onClick={() => setRuleModal(emptyRule())}>New Rule</PrimaryButton>
+            {!isAdmin && <Pill label="View only — Admin manages this matrix" tone="slate" />}
+            {isAdmin && (
+              <PrimaryButton icon={<Icon name="plus" className="w-4 h-4" />} onClick={() => setRuleModal(emptyRule())}>New Rule</PrimaryButton>
+            )}
           </ListToolbar>
           <div className="space-y-6">
             {grouped.filter(g => g.rules.length > 0).map(g => (
@@ -64,11 +68,15 @@ const Doa: React.FC = () => {
                           )}
                         </Td>
                         <Td>
-                          <button onClick={() => toggleDoaRule(r.id, !r.active)}>
+                          {isAdmin ? (
+                            <button onClick={() => toggleDoaRule(r.id, !r.active)}>
+                              <Pill label={r.active ? 'Active' : 'Inactive'} tone={r.active ? 'green' : 'gray'} />
+                            </button>
+                          ) : (
                             <Pill label={r.active ? 'Active' : 'Inactive'} tone={r.active ? 'green' : 'gray'} />
-                          </button>
+                          )}
                         </Td>
-                        <Td><LinkButton onClick={() => setRuleModal(r)}>Edit</LinkButton></Td>
+                        <Td>{isAdmin && <LinkButton onClick={() => setRuleModal(r)}>Edit</LinkButton>}</Td>
                       </Tr>
                     ))}
                   </tbody>

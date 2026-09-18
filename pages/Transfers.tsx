@@ -1,12 +1,13 @@
 import React, { useMemo, useState } from 'react';
 import { useAssetStore } from '../store/AssetStore';
-import { ApprovalDocType, ApprovalStatus, AssetStatus, DocStatus, LIVE_ASSET_STATUSES, Transfer, TransferType, UserRole } from '../types';
+import { ApprovalDocType, ApprovalStatus, AssetStatus, DocStatus, DocumentEntityType, LIVE_ASSET_STATUSES, Transfer, TransferType, UserRole } from '../types';
 import { ListToolbar, TableCard, THead, Tr, Td, FilterSelect } from '../components/ui/Table';
 import { StatusBadge } from '../components/ui/Badge';
 import { Drawer, Modal } from '../components/ui/Overlay';
 import { Field, Input, Select, TextArea, Checkbox, PrimaryButton, SecondaryButton } from '../components/ui/FormControls';
 import { EmptyState } from '../components/ui/EmptyState';
 import ApprovalChain from '../components/ui/ApprovalChain';
+import DocumentsPanel from '../components/ui/DocumentsPanel';
 import Icon from '../components/icons/Icon';
 import { formatCurrency, formatDate, today } from '../lib/format';
 import { useToast } from '../components/ui/Toast';
@@ -32,7 +33,9 @@ const Transfers: React.FC<{ onNavigate: (page: PageKey) => void }> = ({ onNaviga
     <div>
       <ListToolbar title="Asset Transfers" count={filtered.length}>
         <FilterSelect value={statusFilter} onChange={setStatusFilter} options={[{ value: 'all', label: 'All statuses' }, ...Object.values(DocStatus).filter(s => transfers.some(t => t.status === s)).map(s => ({ value: s, label: s }))]} />
-        <PrimaryButton icon={<Icon name="plus" className="w-4 h-4" />} onClick={() => setNewOpen(true)}>New Transfer</PrimaryButton>
+        {currentUser.role !== UserRole.AUDITOR && (
+          <PrimaryButton icon={<Icon name="plus" className="w-4 h-4" />} onClick={() => setNewOpen(true)}>New Transfer</PrimaryButton>
+        )}
       </ListToolbar>
 
       {filtered.length === 0 ? <EmptyState icon="swap" title="No transfers" /> : (
@@ -90,10 +93,10 @@ const Transfers: React.FC<{ onNavigate: (page: PageKey) => void }> = ({ onNaviga
                 }}
               />
             </section>
-            {selectedLive.status === DocStatus.Approved && (
+            {selectedLive.status === DocStatus.Approved && currentUser.role !== UserRole.AUDITOR && (
               <PrimaryButton icon={<Icon name="truck" className="w-4 h-4" />} onClick={() => { dispatchTransfer(selectedLive.id); showToast('Marked as dispatched.'); }}>Mark Dispatched</PrimaryButton>
             )}
-            {selectedLive.status === DocStatus.InTransit && (
+            {selectedLive.status === DocStatus.InTransit && currentUser.role !== UserRole.AUDITOR && (
               <PrimaryButton icon={<Icon name="check" className="w-4 h-4" />} onClick={() => { receiveTransfer(selectedLive.id, 'Received in good condition.'); showToast('Transfer completed.'); }}>
                 Acknowledge Receipt
               </PrimaryButton>
@@ -101,6 +104,15 @@ const Transfers: React.FC<{ onNavigate: (page: PageKey) => void }> = ({ onNaviga
             {selectedLive.status === DocStatus.Completed && selectedLive.acknowledgementRemarks && (
               <p className="text-xs text-text-light">Acknowledgement: "{selectedLive.acknowledgementRemarks}"</p>
             )}
+            <section>
+              <h3 className="text-sm font-semibold mb-2">Documents</h3>
+              <DocumentsPanel
+                entityType={DocumentEntityType.Transfer}
+                entityId={selectedLive.id}
+                entityLabel={selectedLive.transferNo}
+                canEdit={currentUser.role === UserRole.ADMIN || currentUser.role === UserRole.MANAGEMENT}
+              />
+            </section>
           </>
         )}
       </Drawer>

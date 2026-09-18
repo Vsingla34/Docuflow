@@ -1,11 +1,12 @@
 import React, { useState } from 'react';
 import { useAssetStore } from '../store/AssetStore';
-import { DocStatus, Grn, GrnLine, PurchaseOrder } from '../types';
+import { DocStatus, DocumentEntityType, Grn, GrnLine, PurchaseOrder, UserRole } from '../types';
 import { ListToolbar, TableCard, THead, Tr, Td } from '../components/ui/Table';
 import { StatusBadge } from '../components/ui/Badge';
 import { Drawer, Modal } from '../components/ui/Overlay';
 import { Field, Input, Select, TextArea, PrimaryButton, SecondaryButton } from '../components/ui/FormControls';
 import { EmptyState } from '../components/ui/EmptyState';
+import DocumentsPanel from '../components/ui/DocumentsPanel';
 import Icon from '../components/icons/Icon';
 import { formatCurrency, formatDate, today } from '../lib/format';
 import { useToast } from '../components/ui/Toast';
@@ -79,6 +80,15 @@ const Grns: React.FC<{ onNavigate: (page: PageKey) => void }> = ({ onNavigate })
                   return asset ? <button key={id} onClick={() => onNavigate('assets')} className="text-xs font-mono bg-slate-100 hover:bg-slate-200 rounded px-2 py-1">{asset.assetTag}</button> : null;
                 })}
               </div>
+            </section>
+            <section>
+              <h3 className="text-sm font-semibold mb-2">Documents</h3>
+              <DocumentsPanel
+                entityType={DocumentEntityType.Grn}
+                entityId={selected.id}
+                entityLabel={selected.grnNo}
+                canEdit={currentUser.role === UserRole.ADMIN || currentUser.role === UserRole.MANAGEMENT}
+              />
             </section>
           </>
         )}
