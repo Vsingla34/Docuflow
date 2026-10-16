@@ -10,11 +10,13 @@ import ApprovalChain from '../components/ui/ApprovalChain';
 import Icon from '../components/icons/Icon';
 import { formatCurrency, formatDate, daysFromToday, today } from '../lib/format';
 import { useToast } from '../components/ui/Toast';
+import { canEditModule, getCustomRole } from '../lib/permissions';
 
 const OUT_ELIGIBLE = [AssetStatus.InStore, AssetStatus.InUse, AssetStatus.AwaitingDisposal, AssetStatus.UnderRepair];
 
 const GatePasses: React.FC = () => {
-  const { state, currentUser, me, createGatePass, actOnGatePass, issueGatePass, returnGatePass } = useAssetStore();
+  const { state, currentUser, me, createGatePass, actOnGatePass, issueGatePass, returnGatePass, hasActiveDoaRules } = useAssetStore();
+  const canEdit = canEditModule(getCustomRole(currentUser, state.customRoles), 'gatePasses');
   const showToast = useToast();
   const { gatePasses, assets, locations, employees, vendors } = state;
 
@@ -29,7 +31,7 @@ const GatePasses: React.FC = () => {
     <div>
       <ListToolbar title="Gate Passes" count={filtered.length}>
         <FilterSelect value={statusFilter} onChange={setStatusFilter} options={[{ value: 'all', label: 'All statuses' }, ...Object.values(DocStatus).filter(s => gatePasses.some(g => g.status === s)).map(s => ({ value: s, label: s }))]} />
-        <PrimaryButton icon={<Icon name="plus" className="w-4 h-4" />} onClick={() => setNewOpen(true)}>New Gate Pass</PrimaryButton>
+        {canEdit && <PrimaryButton icon={<Icon name="plus" className="w-4 h-4" />} onClick={() => setNewOpen(true)}>New Gate Pass</PrimaryButton>}
       </ListToolbar>
 
       {filtered.length === 0 ? <EmptyState icon="truck" title="No gate passes" /> : (
@@ -112,6 +114,13 @@ const GatePasses: React.FC = () => {
           vendors={vendors}
           issuerId={me?.id || currentUser.id}
           onSubmit={draft => {
+            // AUDIT fix GOV-01 (extended to Gate Passes): a document type with zero configured
+            // DOA rules would otherwise auto-approve silently regardless of value — the same gap
+            // already closed for Requisitions, Purchase Orders and Disposals. Block here too.
+            if (!hasActiveDoaRules(ApprovalDocType.GatePass)) {
+              showToast('No DOA approval rules exist for Gate Passes yet. Ask your Superadmin to configure Governance → DOA Rules before this can be submitted.', 'error');
+              return;
+            }
             createGatePass(draft);
             showToast('Gate pass requested.');
             setNewOpen(false);

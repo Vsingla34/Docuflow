@@ -8,6 +8,7 @@
  * access (they still see their own assigned assets and can raise requests).
  */
 export enum UserRole {
+  SUPERADMIN = 'Superadmin',
   ADMIN = 'Admin',
   MANAGEMENT = 'Management',
   EMPLOYEE = 'Employee',
@@ -19,7 +20,52 @@ export interface User {
   id: string;
   name: string;
   role: UserRole;
+  customRoleId?: string;
   employeeId?: string;
+  /** True when this account must set its own password before using the app — e.g. it was
+   *  created with a system-generated temporary password. See AUDIT fix BUG-02. */
+  mustChangePassword?: boolean;
+  /** True when this account has at least one verified TOTP factor enrolled with Supabase Auth.
+   *  Drives both the mandatory-MFA gate for Superadmin/Admin and the voluntary setup entry other
+   *  roles see in the header. See lib/mfa.ts and AUDIT backlog item "MFA". */
+  mfaEnrolled?: boolean;
+}
+
+/**
+ * One access-control module per real page a custom role can be scoped to (see
+ * components/layout/nav.ts's PAGE_PERMISSION_MODULE for the page <-> module mapping). This
+ * replaced an earlier, much coarser set of 7 "section-level" modules (e.g. a single "movement"
+ * toggle covering both Transfers and Gate Passes) that gave admins almost no real control over
+ * what a custom role could actually touch. Dashboard, Tag/QR Lookup, Employees & Users, User
+ * Management, Company Management and Custom Roles itself are intentionally NOT modules here —
+ * those stay governed purely by the account's base UserRole (see PAGE_ROLES in nav.ts).
+ */
+export const PERMISSION_MODULES = [
+  'assets', 'categories', 'projects',
+  'requisitions', 'purchaseOrders', 'grns',
+  'transfers', 'gatePasses',
+  'amc', 'serviceTickets', 'replacements', 'disposals',
+  'audits', 'doa',
+  'masters', 'masterUploads', 'activity',
+] as const;
+
+export type PermissionModule = typeof PERMISSION_MODULES[number];
+
+export type Permissions = Record<PermissionModule, { view: boolean; edit: boolean }>;
+
+export interface CustomRole {
+  id: string;
+  name: string;
+  description: string;
+  permissions: Permissions;
+}
+
+export interface Company {
+  id: string;
+  name: string;
+  code: string;
+  displayId?: string;
+  logoUrl?: string;
 }
 
 // ---------------------------------------------------------------------------
@@ -44,8 +90,13 @@ export interface Employee {
   locationId: string;
   reportsTo?: string;
   role: UserRole;
+  customRoleId?: string;
   status: EmployeeStatus;
   joinedOn: string;
+  // Who to contact if something happens to this employee on the job -- optional, filled in as
+  // HR collects it rather than required up front.
+  emergencyContactName?: string;
+  emergencyContactPhone?: string;
 }
 
 export interface Department {
@@ -95,6 +146,11 @@ export interface Vendor {
   isAmcPartner: boolean;
   rating: number;
   status: VendorStatus;
+  // Payment details, used when settling POs/AMC invoices against this vendor. All optional --
+  // most vendors are set up long before anyone has the bank slip in hand.
+  bankAccountName?: string;
+  bankAccountNumber?: string;
+  bankIfsc?: string;
 }
 
 // ---------------------------------------------------------------------------
@@ -105,6 +161,52 @@ export enum DepreciationMethod {
   SLM = 'Straight Line (SLM)',
   WDV = 'Written Down Value (WDV)',
   None = 'Not Depreciated',
+}
+
+// ---------------------------------------------------------------------------
+// Numbering / prefix-suffix rules (Settings page)
+// ---------------------------------------------------------------------------
+
+/** Every ID-like code in the app that an admin can attach an auto prefix/suffix to. */
+export type NumberingEntityKind = 'assetTag' | 'employee' | 'category' | 'location' | 'department' | 'vendor';
+
+export interface NumberingRule {
+  /** Text stuck on the front of whatever the user types, e.g. "EMP-". */
+  prefix: string;
+  /** Text stuck on the end, e.g. "-HQ". */
+  suffix: string;
+  /** If >0 and the user's input is purely numeric, it is zero-padded to this many digits. 0 = no padding. */
+  padDigits: number;
+}
+
+export type NumberingRules = Record<NumberingEntityKind, NumberingRule>;
+
+// ---------------------------------------------------------------------------
+// Depreciation Rate Master (Settings page) — centrally managed rates that can
+// override whatever is stored on an individual category/asset when the Reports
+// page calculates depreciation, so updating one row retroactively re-prices
+// every asset in that category instead of requiring each asset to be re-saved.
+// ---------------------------------------------------------------------------
+
+/** Which statutory basis a Depreciation Rate Master row applies to. Companies Act rates are the
+ *  ones that drive the book Net Book Value shown everywhere in the app (Asset Register, Dashboard,
+ *  Disposals, Reports); Income Tax rates are a second, parallel set kept purely for the Reports
+ *  page's Income Tax NBV column (same SLM/WDV calculation engine, just a separate figure) --
+ *  this does NOT implement actual Income Tax Act block-of-assets rules (rate slabs, the 180-day
+ *  half-year rule, block additions/deletions), which is a materially different calculation. */
+export enum DepreciationRateType {
+  CompaniesAct = 'CompaniesAct',
+  IncomeTax = 'IncomeTax',
+}
+
+export interface DepreciationRateRule {
+  id: string;
+  categoryId: string;
+  rateType: DepreciationRateType;
+  method: DepreciationMethod;
+  usefulLifeYears: number;
+  salvageValuePct: number;
+  updatedAt: string;
 }
 
 export interface AssetCategory {
@@ -279,6 +381,9 @@ export interface Asset {
 
   disposal?: { mode: DisposalMode; date: string; realisedValue: number; refNo: string };
   remarks?: string;
+  /** Set when this asset was created by a bulk-upload CSV, so deleting that upload from Asset
+   *  Upload History can cascade-delete every asset it created (see supabase/15_asset_uploads.sql). */
+  uploadId?: string;
   history: AssetEvent[];
 }
 
@@ -426,6 +531,13 @@ export interface PurchaseOrder extends Approvable {
   poNo: string;
   prId?: string;
   prNo?: string;
+  /** True when this PO was raised without a source Requisition under the emergency-purchase
+   *  exception. Must always be accompanied by emergencyJustification. See AUDIT fix PROC-01:
+   *  a PO must otherwise always originate from an approved, unconverted Requisition. */
+  isEmergencyPurchase?: boolean;
+  /** Required, non-empty when isEmergencyPurchase is true. Free-text reason an approver and
+   *  later an auditor can read to understand why the normal PR→PO control was bypassed. */
+  emergencyJustification?: string;
   vendorId: string;
   orderDate: string;
   expectedDeliveryDate: string;
@@ -764,6 +876,43 @@ export interface ActivityEntry {
 }
 
 // ---------------------------------------------------------------------------
+// Projects (CWIP)
+// ---------------------------------------------------------------------------
+
+export enum ProjectStatus {
+  Draft = 'Draft',
+  InProgress = 'In Progress',
+  Completed = 'Completed',
+  Cancelled = 'Cancelled',
+}
+
+export interface ProjectEntry {
+  id: string;
+  date: string;
+  description: string;
+  amount: number;
+  recordedBy: string;
+}
+
+export interface Project {
+  id: string;
+  projectNo: string;
+  title: string;
+  description: string;
+  status: ProjectStatus;
+  startDate: string;
+  endDate?: string;
+  budget: number;
+  entries: ProjectEntry[];
+  totalSpent: number;
+  managerId: string;
+  locationId: string;
+  createdOn: string;
+  completedOn?: string;
+  resultAssetId?: string;
+}
+
+// ---------------------------------------------------------------------------
 // Root state
 // ---------------------------------------------------------------------------
 
@@ -782,12 +931,17 @@ export interface AssetState {
   transfers: Transfer[];
   gatePasses: GatePass[];
   amcContracts: AmcContract[];
+  amcVisits: AmcVisit[];
   serviceTickets: ServiceTicket[];
   replacements: Replacement[];
   disposals: Disposal[];
   doaRules: DoaRule[];
   delegations: DoaDelegation[];
   auditPlans: AuditPlan[];
+  projects: Project[];
+  customRoles: CustomRole[];
   activity: ActivityEntry[];
   counters: Record<string, number>;
+  numberingRules: NumberingRules;
+  depreciationRateRules: DepreciationRateRule[];
 }

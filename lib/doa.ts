@@ -29,6 +29,42 @@ const scopeMatches = (rule: DoaRule, scope: DoaScope): boolean => {
 };
 
 /**
+ * True when at least one active DOA rule exists for this document type, at ANY amount — i.e.
+ * whether the authority matrix has been configured for it at all. This is deliberately not the
+ * same question `resolveApprovalChain` answers (whether a rule matches THIS document's amount):
+ * a brand-new tenant, or one where the last rule for a doc type was deactivated by mistake, has
+ * zero rules for every amount, and resolveApprovalChain's empty-chain result is indistinguishable
+ * from "this amount is genuinely below every band" unless this check runs first. See AUDIT fix
+ * GOV-01 — callers (pages/Requisitions.tsx, PurchaseOrders.tsx, Disposals.tsx, ...) must call
+ * this before submitting a document and block submission if it returns false, rather than
+ * letting an empty chain silently auto-approve.
+ */
+export const hasActiveRulesFor = (rules: DoaRule[], docType: ApprovalDocType): boolean =>
+  rules.some(rule => rule.active && rule.docType === docType);
+
+/**
+ * Returns a Pending approval step for the HIGHEST configured level of this document type,
+ * ignoring the document's amount entirely. Used to force an elevated sign-off onto a document
+ * that bypassed the normal control it would otherwise need — specifically, a Purchase Order
+ * raised under the "Emergency Purchase (no PR)" exception (see AUDIT fix PROC-01). Returns null
+ * only when no active rule exists at all for this doc type; callers should already have checked
+ * `hasActiveRulesFor` before reaching this point, since there is no DOA-based control to force
+ * an emergency document through otherwise.
+ */
+export const forceTopLevelStep = (rules: DoaRule[], docType: ApprovalDocType): ApprovalStep | null => {
+  const matching = rules.filter(rule => rule.active && rule.docType === docType);
+  if (matching.length === 0) return null;
+  const top = matching.reduce((best, rule) => (rule.level > best.level ? rule : best));
+  return {
+    level: top.level,
+    ruleId: top.id,
+    approverTitle: top.approverTitle,
+    approverRole: top.approverRole,
+    status: ApprovalStatus.Pending,
+  };
+};
+
+/**
  * Builds the approval chain for a document from the authority matrix. Every
  * active rule whose value band contains the document amount contributes one
  * step, ordered by level. An empty chain means the document is within the

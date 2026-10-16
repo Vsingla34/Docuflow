@@ -10,10 +10,12 @@ import ApprovalChain from '../components/ui/ApprovalChain';
 import Icon from '../components/icons/Icon';
 import { formatCurrency, formatDate, today, uid } from '../lib/format';
 import { useToast } from '../components/ui/Toast';
+import { canEditModule, getCustomRole } from '../lib/permissions';
 import { PageKey } from '../components/layout/nav';
 
 const Requisitions: React.FC<{ onNavigate: (page: PageKey) => void }> = ({ onNavigate }) => {
-  const { state, currentUser, me, submitRequisition, actOnRequisition, convertRequisitionToPo } = useAssetStore();
+  const { state, currentUser, me, submitRequisition, actOnRequisition, convertRequisitionToPo, hasActiveDoaRules } = useAssetStore();
+  const canEdit = canEditModule(getCustomRole(currentUser, state.customRoles), 'requisitions');
   const showToast = useToast();
   const { requisitions, employees, departments, locations, categories, variants, vendors } = state;
 
@@ -32,7 +34,7 @@ const Requisitions: React.FC<{ onNavigate: (page: PageKey) => void }> = ({ onNav
     <div>
       <ListToolbar title="Purchase Requisitions" count={filtered.length}>
         <FilterSelect value={statusFilter} onChange={setStatusFilter} options={[{ value: 'all', label: 'All statuses' }, ...Object.values(DocStatus).filter(s => requisitions.some(r => r.status === s)).map(s => ({ value: s, label: s }))]} />
-        <PrimaryButton icon={<Icon name="plus" className="w-4 h-4" />} onClick={() => setNewOpen(true)}>New Requisition</PrimaryButton>
+        {canEdit && <PrimaryButton icon={<Icon name="plus" className="w-4 h-4" />} onClick={() => setNewOpen(true)}>New Requisition</PrimaryButton>}
       </ListToolbar>
 
       {filtered.length === 0 ? <EmptyState icon="clipboard" title="No requisitions" /> : (
@@ -116,6 +118,13 @@ const Requisitions: React.FC<{ onNavigate: (page: PageKey) => void }> = ({ onNav
           defaultDepartmentId={me?.departmentId}
           defaultLocationId={me?.locationId}
           onSubmit={draft => {
+            // AUDIT fix GOV-01: a document type with zero configured DOA rules would otherwise
+            // auto-approve silently, regardless of amount — resolveApprovalChain returns an
+            // empty chain, which chainOutcome reads as "no approval needed". Block instead.
+            if (!hasActiveDoaRules(ApprovalDocType.Requisition)) {
+              showToast('No DOA approval rules exist for Purchase Requisitions yet. Ask your Superadmin to configure Governance → DOA Rules before this can be submitted.', 'error');
+              return;
+            }
             submitRequisition({ ...draft, requestedById: me?.id || currentUser.id });
             showToast('Requisition submitted for approval.');
             setNewOpen(false);

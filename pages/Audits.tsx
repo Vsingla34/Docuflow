@@ -7,8 +7,9 @@ import { Drawer, Modal } from '../components/ui/Overlay';
 import { Field, Input, Select, TextArea, PrimaryButton, SecondaryButton } from '../components/ui/FormControls';
 import { EmptyState } from '../components/ui/EmptyState';
 import Icon from '../components/icons/Icon';
-import { formatDate, today, uid } from '../lib/format';
+import { formatDate, today } from '../lib/format';
 import { useToast } from '../components/ui/Toast';
+import { canEditModule, getCustomRole } from '../lib/permissions';
 
 const RESULT_TONE: Record<VerificationResult, 'slate' | 'green' | 'red' | 'amber'> = {
   [VerificationResult.Pending]: 'slate',
@@ -21,6 +22,7 @@ const RESULT_TONE: Record<VerificationResult, 'slate' | 'green' | 'red' | 'amber
 
 const Audits: React.FC = () => {
   const { state, currentUser, me, createAuditPlan, recordVerification, signOffAudit } = useAssetStore();
+  const canEdit = canEditModule(getCustomRole(currentUser, state.customRoles), 'audits');
   const showToast = useToast();
   const { auditPlans, assets, locations, departments, categories, employees } = state;
 
@@ -38,7 +40,7 @@ const Audits: React.FC = () => {
     <div>
       <ListToolbar title="Physical Verification Audits" count={filtered.length}>
         <FilterSelect value={statusFilter} onChange={setStatusFilter} options={[{ value: 'all', label: 'All statuses' }, ...Object.values(DocStatus).filter(s => auditPlans.some(p => p.status === s)).map(s => ({ value: s, label: s }))]} />
-        <PrimaryButton icon={<Icon name="plus" className="w-4 h-4" />} onClick={() => setNewOpen(true)}>New Audit Plan</PrimaryButton>
+        {canEdit && <PrimaryButton icon={<Icon name="plus" className="w-4 h-4" />} onClick={() => setNewOpen(true)}>New Audit Plan</PrimaryButton>}
       </ListToolbar>
 
       {filtered.length === 0 ? <EmptyState icon="scan" title="No audit plans" /> : (
@@ -137,7 +139,14 @@ const VerificationRow: React.FC<{
   const [actualCustodianId, setActualCustodianId] = useState(line.actualCustodianId || line.expectedCustodianId || '');
   const [condition, setCondition] = useState<AssetCondition>(line.condition || AssetCondition.Good);
   const [remarks, setRemarks] = useState(line.remarks || '');
-  const dirty = result !== line.result;
+  // Previously only compared `result`, so editing remarks/condition/location/custodian without
+  // also changing the result dropdown left the "Save Finding" button hidden and those edits were
+  // silently lost when the drawer closed.
+  const dirty = result !== line.result
+    || remarks !== (line.remarks || '')
+    || condition !== (line.condition || AssetCondition.Good)
+    || actualLocationId !== (line.actualLocationId || line.expectedLocationId)
+    || actualCustodianId !== (line.actualCustodianId || line.expectedCustodianId || '');
 
   return (
     <div className="border border-border rounded-lg p-3 space-y-2">

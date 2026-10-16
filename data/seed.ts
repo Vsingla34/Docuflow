@@ -46,6 +46,7 @@ import {
   VerificationResult,
   AssetVariant,
 } from '../types';
+import { DEFAULT_NUMBERING_RULES } from '../lib/numbering';
 
 // ---------------------------------------------------------------------------
 // Organisation masters
@@ -873,6 +874,8 @@ export const SEED_COUNTERS: Record<string, number> = {
 };
 
 export const buildSeedState = (): AssetState => ({
+  numberingRules: DEFAULT_NUMBERING_RULES,
+  depreciationRateRules: [],
   employees: SEED_EMPLOYEES,
   departments: SEED_DEPARTMENTS,
   locations: SEED_LOCATIONS,
@@ -893,6 +896,9 @@ export const buildSeedState = (): AssetState => ({
   doaRules: SEED_DOA_RULES,
   delegations: SEED_DELEGATIONS,
   auditPlans: SEED_AUDIT_PLANS,
+  projects: [],
+  customRoles: [],
+  amcVisits: [],
   activity: SEED_ACTIVITY,
   counters: SEED_COUNTERS,
 });

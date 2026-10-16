@@ -11,11 +11,13 @@ import Icon from '../components/icons/Icon';
 import { formatCurrency, formatDate, today } from '../lib/format';
 import { computeDepreciation } from '../lib/depreciation';
 import { useToast } from '../components/ui/Toast';
+import { canEditModule, getCustomRole } from '../lib/permissions';
 
 const DISPOSABLE = [AssetStatus.AwaitingDisposal, AssetStatus.InStore, AssetStatus.UnderRepair, AssetStatus.Retired];
 
 const Disposals: React.FC = () => {
-  const { state, currentUser, me, createDisposal, actOnDisposal, completeDisposal } = useAssetStore();
+  const { state, currentUser, me, createDisposal, actOnDisposal, completeDisposal, hasActiveDoaRules } = useAssetStore();
+  const canEdit = canEditModule(getCustomRole(currentUser, state.customRoles), 'disposals');
   const showToast = useToast();
   const { disposals, assets } = state;
 
@@ -32,7 +34,7 @@ const Disposals: React.FC = () => {
     <div>
       <ListToolbar title="Disposal & Sale" count={filtered.length}>
         <FilterSelect value={statusFilter} onChange={setStatusFilter} options={[{ value: 'all', label: 'All statuses' }, ...Object.values(DocStatus).filter(s => disposals.some(d => d.status === s)).map(s => ({ value: s, label: s }))]} />
-        <PrimaryButton icon={<Icon name="plus" className="w-4 h-4" />} onClick={() => setNewOpen(true)}>New Disposal</PrimaryButton>
+        {canEdit && <PrimaryButton icon={<Icon name="plus" className="w-4 h-4" />} onClick={() => setNewOpen(true)}>New Disposal</PrimaryButton>}
       </ListToolbar>
 
       {filtered.length === 0 ? <EmptyState icon="trash" title="No disposal records" /> : (
@@ -106,7 +108,19 @@ const Disposals: React.FC = () => {
         <NewDisposalForm
           assets={assets.filter(a => DISPOSABLE.includes(a.status))}
           requesterId={me?.id || currentUser.id}
-          onSubmit={draft => { createDisposal(draft); showToast('Disposal request submitted.'); setNewOpen(false); }}
+          onSubmit={draft => {
+            // AUDIT fix GOV-01 — see the matching guard in pages/Requisitions.tsx. Disposal is
+            // an irreversible, value-destroying transaction, so this check matters even more
+            // here than on a Requisition: without it, any user who can reach this form can
+            // dispose of any asset with zero sign-off if the Disposal DOA band was never set up.
+            if (!hasActiveDoaRules(ApprovalDocType.Disposal)) {
+              showToast('No DOA approval rules exist for Disposals yet. Ask your Superadmin to configure Governance → DOA Rules before this can be submitted.', 'error');
+              return;
+            }
+            createDisposal(draft);
+            showToast('Disposal request submitted.');
+            setNewOpen(false);
+          }}
         />
       </Modal>
 
@@ -135,7 +149,7 @@ const NewDisposalForm: React.FC<{
   const toggle = (id: string) => setSelectedIds(prev => (prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]));
   const bookValueOf = (id: string) => {
     const asset = state.assets.find(a => a.id === id);
-    return asset ? computeDepreciation(asset).netBookValue : 0;
+    return asset ? computeDepreciation(asset, undefined, state.depreciationRateRules).netBookValue : 0;
   };
   const totalBookValue = selectedIds.reduce((t, id) => t + bookValueOf(id), 0);
   const totalRealisedValue = selectedIds.reduce((t, id) => t + (lineState[id] || 0), 0);
@@ -200,4 +214,4 @@ const CompleteDisposalForm: React.FC<{ onSubmit: (date: string, invoiceNo?: stri
   );
 };
 
-export default Disposals;
+export default Disposals; 

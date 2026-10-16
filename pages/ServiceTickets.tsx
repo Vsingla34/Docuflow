@@ -11,13 +11,16 @@ import { EmptyState } from '../components/ui/EmptyState';
 import ApprovalChain from '../components/ui/ApprovalChain';
 import Icon from '../components/icons/Icon';
 import { formatCurrency, formatDate, today, uid } from '../lib/format';
+import { slaDueDate, slaLabel, slaState, slaTone } from '../lib/sla';
 import { useToast } from '../components/ui/Toast';
+import { canEditModule, getCustomRole } from '../lib/permissions';
 import { PageKey } from '../components/layout/nav';
 
 const LIVE_FOR_TICKET = [AssetStatus.InUse, AssetStatus.InStore, AssetStatus.IssuedOut, AssetStatus.UnderRepair];
 
 const ServiceTickets: React.FC<{ onNavigate: (page: PageKey) => void }> = ({ onNavigate }) => {
-  const { state, currentUser, me, createServiceTicket, actOnServiceTicket, startServiceTicket, closeServiceTicket, createReplacement } = useAssetStore();
+  const { state, currentUser, me, createServiceTicket, actOnServiceTicket, startServiceTicket, closeServiceTicket, createReplacement, hasActiveDoaRules } = useAssetStore();
+  const canEdit = canEditModule(getCustomRole(currentUser, state.customRoles), 'serviceTickets');
   const showToast = useToast();
   const { serviceTickets, assets, vendors, employees, amcContracts } = state;
 
@@ -35,25 +38,29 @@ const ServiceTickets: React.FC<{ onNavigate: (page: PageKey) => void }> = ({ onN
     <div>
       <ListToolbar title="Repairs & Service Tickets" count={filtered.length}>
         <FilterSelect value={statusFilter} onChange={setStatusFilter} options={[{ value: 'all', label: 'All statuses' }, ...Object.values(DocStatus).filter(s => serviceTickets.some(t => t.status === s)).map(s => ({ value: s, label: s }))]} />
-        <PrimaryButton icon={<Icon name="plus" className="w-4 h-4" />} onClick={() => setNewOpen(true)}>Report Fault</PrimaryButton>
+        {canEdit && <PrimaryButton icon={<Icon name="plus" className="w-4 h-4" />} onClick={() => setNewOpen(true)}>Report Fault</PrimaryButton>}
       </ListToolbar>
 
       {filtered.length === 0 ? <EmptyState icon="wrench" title="No service tickets" /> : (
         <TableCard>
-          <THead columns={['Ticket No.', 'Asset', 'Priority', 'Fault', 'Est. Cost', 'AMC', 'Status', '']} />
+          <THead columns={['Ticket No.', 'Asset', 'Priority', 'Fault', 'Est. Cost', 'AMC', 'SLA', 'Status', '']} />
           <tbody>
-            {filtered.map(t => (
-              <Tr key={t.id} onClick={() => setSelected(t)}>
-                <Td className="font-mono text-xs">{t.ticketNo}</Td>
-                <Td className="font-mono text-xs">{assetOf(t.assetId)?.assetTag}</Td>
-                <Td><Pill label={t.priority} tone={t.priority === TicketPriority.Critical ? 'red' : t.priority === TicketPriority.High ? 'amber' : 'slate'} /></Td>
-                <Td className="max-w-xs truncate">{t.faultDescription}</Td>
-                <Td>{formatCurrency(t.actualCost ?? t.estimatedCost)}</Td>
-                <Td>{t.underAmc ? <Pill label="Covered" tone="green" /> : <Pill label="Chargeable" tone="gray" />}</Td>
-                <Td><StatusBadge status={t.status} /></Td>
-                <Td><button className="text-primary text-sm font-semibold">View</button></Td>
-              </Tr>
-            ))}
+            {filtered.map(t => {
+              const sla = slaState(t);
+              return (
+                <Tr key={t.id} onClick={() => setSelected(t)}>
+                  <Td className="font-mono text-xs">{t.ticketNo}</Td>
+                  <Td className="font-mono text-xs">{assetOf(t.assetId)?.assetTag}</Td>
+                  <Td><Pill label={t.priority} tone={t.priority === TicketPriority.Critical ? 'red' : t.priority === TicketPriority.High ? 'amber' : 'slate'} /></Td>
+                  <Td className="max-w-xs truncate">{t.faultDescription}</Td>
+                  <Td>{formatCurrency(t.actualCost ?? t.estimatedCost)}</Td>
+                  <Td>{t.underAmc ? <Pill label="Covered" tone="green" /> : <Pill label="Chargeable" tone="gray" />}</Td>
+                  <Td>{sla === 'not-applicable' ? <span className="text-xs text-text-light">—</span> : <Pill label={slaLabel(t)} tone={slaTone(sla)} />}</Td>
+                  <Td><StatusBadge status={t.status} /></Td>
+                  <Td><button className="text-primary text-sm font-semibold">View</button></Td>
+                </Tr>
+              );
+            })}
           </tbody>
         </TableCard>
       )}
@@ -61,11 +68,17 @@ const ServiceTickets: React.FC<{ onNavigate: (page: PageKey) => void }> = ({ onN
       <Drawer isOpen={!!selectedLive} onClose={() => setSelected(null)} title={selectedLive?.ticketNo || ''} subtitle={selectedLive ? assetOf(selectedLive.assetId)?.name : ''}>
         {selectedLive && (
           <>
-            <div className="flex gap-2 flex-wrap"><StatusBadge status={selectedLive.status} /><Pill label={selectedLive.priority} tone={selectedLive.priority === TicketPriority.Critical ? 'red' : 'amber'} />{selectedLive.underAmc && <Pill label="Under AMC" tone="green" />}</div>
+            <div className="flex gap-2 flex-wrap">
+              <StatusBadge status={selectedLive.status} />
+              <Pill label={selectedLive.priority} tone={selectedLive.priority === TicketPriority.Critical ? 'red' : 'amber'} />
+              {selectedLive.underAmc && <Pill label="Under AMC" tone="green" />}
+              {slaState(selectedLive) !== 'not-applicable' && <Pill label={slaLabel(selectedLive)} tone={slaTone(slaState(selectedLive))} />}
+            </div>
             <p className="text-sm text-text-light">{selectedLive.faultDescription}</p>
             <dl className="grid grid-cols-2 gap-x-4 gap-y-2 text-sm">
               <dt className="text-text-light">Reported By</dt><dd className="text-right font-medium">{employees.find(e => e.id === selectedLive.reportedById)?.name}</dd>
               <dt className="text-text-light">Reported On</dt><dd className="text-right font-medium">{formatDate(selectedLive.reportedOn)}</dd>
+              {slaState(selectedLive) !== 'not-applicable' && <><dt className="text-text-light">SLA Due By</dt><dd className="text-right font-medium">{formatDate(slaDueDate(selectedLive))}</dd></>}
               {selectedLive.vendorId && <><dt className="text-text-light">Vendor</dt><dd className="text-right font-medium">{vendors.find(v => v.id === selectedLive.vendorId)?.name}</dd></>}
               {selectedLive.assignedTo && <><dt className="text-text-light">Assigned To</dt><dd className="text-right font-medium">{selectedLive.assignedTo}</dd></>}
               <dt className="text-text-light">Estimated Cost</dt><dd className="text-right font-medium">{formatCurrency(selectedLive.estimatedCost)}</dd>
@@ -141,7 +154,18 @@ const ServiceTickets: React.FC<{ onNavigate: (page: PageKey) => void }> = ({ onN
           amcContracts={amcContracts}
           vendors={vendors}
           reporterId={me?.id || currentUser.id}
-          onSubmit={draft => { createServiceTicket(draft); showToast('Service ticket raised.'); setNewOpen(false); }}
+          onSubmit={draft => {
+            // AUDIT fix GOV-01 (extended to Service Tickets): see Requisitions/PurchaseOrders for
+            // the original fix — a document type with zero configured DOA rules would otherwise
+            // auto-approve silently regardless of value.
+            if (!hasActiveDoaRules(ApprovalDocType.ServiceTicket)) {
+              showToast('No DOA approval rules exist for Service Tickets yet. Ask your Superadmin to configure Governance → DOA Rules before this can be submitted.', 'error');
+              return;
+            }
+            createServiceTicket(draft);
+            showToast('Service ticket raised.');
+            setNewOpen(false);
+          }}
         />
       </Modal>
 

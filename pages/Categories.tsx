@@ -5,10 +5,12 @@ import { ListToolbar, TableCard, THead, Tr, Td } from '../components/ui/Table';
 import { Pill } from '../components/ui/Badge';
 import { Modal } from '../components/ui/Overlay';
 import { Field, Input, Select, TextArea, Checkbox, PrimaryButton, SecondaryButton, LinkButton } from '../components/ui/FormControls';
+import { CodeField } from '../components/ui/CodeField';
 import { EmptyState } from '../components/ui/EmptyState';
 import Icon from '../components/icons/Icon';
 import { formatCurrency, uid } from '../lib/format';
 import { useToast } from '../components/ui/Toast';
+import { canEditModule, getCustomRole } from '../lib/permissions';
 
 const emptyCategory = (): AssetCategory => ({
   id: '', code: '', name: '', description: '', depreciationMethod: DepreciationMethod.SLM, usefulLifeYears: 5,
@@ -20,15 +22,24 @@ const emptyVariant = (categoryId: string): AssetVariant => ({
 });
 
 const Categories: React.FC = () => {
-  const { state, saveCategory, saveVariant } = useAssetStore();
+  const { state, currentUser, saveCategory, saveVariant, deleteCategory } = useAssetStore();
   const { categories, variants, assets } = state;
   const showToast = useToast();
+
+  const canEdit = canEditModule(getCustomRole(currentUser, state.customRoles), 'categories');
 
   const [tab, setTab] = useState<'categories' | 'variants'>('categories');
   const [catModal, setCatModal] = useState<AssetCategory | null>(null);
   const [varModal, setVarModal] = useState<AssetVariant | null>(null);
 
   const assetCount = (categoryId: string) => assets.filter(a => a.categoryId === categoryId).length;
+
+  const handleDeleteCategory = async (cat: AssetCategory) => {
+    if (!window.confirm(`Are you sure you want to delete category "${cat.name}"? Its variants will be deleted too.`)) return;
+    const res = await deleteCategory(cat.id);
+    if (res.ok) showToast(`${cat.name} deleted.`);
+    else showToast(res.error || 'Failed to delete category.', 'error');
+  };
 
   return (
     <div>
@@ -43,7 +54,7 @@ const Categories: React.FC = () => {
       {tab === 'categories' ? (
         <>
           <ListToolbar title="Categories" count={categories.length}>
-            <PrimaryButton icon={<Icon name="plus" className="w-4 h-4" />} onClick={() => setCatModal(emptyCategory())}>New Category</PrimaryButton>
+            {canEdit && <PrimaryButton icon={<Icon name="plus" className="w-4 h-4" />} onClick={() => setCatModal(emptyCategory())}>New Category</PrimaryButton>}
           </ListToolbar>
           <TableCard>
             <THead columns={['Code', 'Name', 'Parent', 'Depreciation', 'Useful Life', 'Assets', 'Flags', '']} />
@@ -64,7 +75,12 @@ const Categories: React.FC = () => {
                       {!cat.active && <Pill label="Inactive" tone="gray" />}
                     </div>
                   </Td>
-                  <Td><LinkButton onClick={() => setCatModal(cat)}>Edit</LinkButton></Td>
+                  <Td>
+                    <div className="flex gap-3">
+                      <LinkButton onClick={() => setCatModal(cat)}>Edit</LinkButton>
+                      <button onClick={() => handleDeleteCategory(cat)} className="text-red-500 hover:text-red-700 font-medium text-sm">Delete</button>
+                    </div>
+                  </Td>
                 </Tr>
               ))}
             </tbody>
@@ -73,7 +89,7 @@ const Categories: React.FC = () => {
       ) : (
         <>
           <ListToolbar title="Variants" count={variants.length}>
-            <PrimaryButton icon={<Icon name="plus" className="w-4 h-4" />} onClick={() => setVarModal(emptyVariant(categories[0]?.id || ''))}>New Variant</PrimaryButton>
+            {canEdit && <PrimaryButton icon={<Icon name="plus" className="w-4 h-4" />} onClick={() => setVarModal(emptyVariant(categories[0]?.id || ''))}>New Variant</PrimaryButton>}
           </ListToolbar>
           {variants.length === 0 ? <EmptyState title="No variants yet" /> : (
             <TableCard>
@@ -100,6 +116,7 @@ const Categories: React.FC = () => {
         <CategoryModal
           category={catModal}
           categories={categories}
+          numberingRule={state.numberingRules.category}
           onClose={() => setCatModal(null)}
           onSave={cat => { saveCategory(cat); showToast('Category saved.'); setCatModal(null); }}
         />
@@ -116,12 +133,12 @@ const Categories: React.FC = () => {
   );
 };
 
-const CategoryModal: React.FC<{ category: AssetCategory; categories: AssetCategory[]; onClose: () => void; onSave: (c: AssetCategory) => void }> = ({ category, categories, onClose, onSave }) => {
+const CategoryModal: React.FC<{ category: AssetCategory; categories: AssetCategory[]; numberingRule?: import('../types').NumberingRule; onClose: () => void; onSave: (c: AssetCategory) => void }> = ({ category, categories, numberingRule, onClose, onSave }) => {
   const [form, setForm] = useState(category);
   return (
     <Modal isOpen onClose={onClose} title={category.id ? 'Edit Category' : 'New Category'} wide>
       <div className="grid grid-cols-2 gap-4">
-        <Field label="Code" required><Input value={form.code} onChange={e => setForm({ ...form, code: e.target.value.toUpperCase() })} placeholder="e.g. ITL" /></Field>
+        <CodeField value={form.code} onChange={v => setForm({ ...form, code: v })} rule={numberingRule} isNew={!category.id} placeholder="e.g. ITL" />
         <Field label="Name" required><Input value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} /></Field>
         <Field label="Parent Category" className="col-span-2">
           <Select value={form.parentId || ''} onChange={e => setForm({ ...form, parentId: e.target.value || undefined })}>

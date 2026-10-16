@@ -9,6 +9,7 @@ import { EmptyState } from '../components/ui/EmptyState';
 import Icon from '../components/icons/Icon';
 import { formatCurrency, formatDate, today, uid } from '../lib/format';
 import { useToast } from '../components/ui/Toast';
+import { canEditModule, getCustomRole } from '../lib/permissions';
 
 const emptyRule = (): DoaRule => ({
   id: '', docType: ApprovalDocType.Requisition, level: 1, approverTitle: '', approverRole: UserRole.MANAGEMENT,
@@ -16,9 +17,10 @@ const emptyRule = (): DoaRule => ({
 });
 
 const Doa: React.FC = () => {
-  const { state, saveDoaRule, toggleDoaRule, saveDelegation, toggleDelegation } = useAssetStore();
+  const { state, currentUser, saveDoaRule, toggleDoaRule, saveDelegation, toggleDelegation } = useAssetStore();
   const showToast = useToast();
   const { doaRules, delegations, employees, categories, locations } = state;
+  const canEdit = canEditModule(getCustomRole(currentUser, state.customRoles), 'doa');
 
   const [tab, setTab] = useState<'matrix' | 'delegations'>('matrix');
   const [ruleModal, setRuleModal] = useState<DoaRule | null>(null);
@@ -40,7 +42,7 @@ const Doa: React.FC = () => {
       {tab === 'matrix' ? (
         <>
           <ListToolbar title="Delegation of Authority Matrix" count={doaRules.length}>
-            <PrimaryButton icon={<Icon name="plus" className="w-4 h-4" />} onClick={() => setRuleModal(emptyRule())}>New Rule</PrimaryButton>
+            {canEdit && <PrimaryButton icon={<Icon name="plus" className="w-4 h-4" />} onClick={() => setRuleModal(emptyRule())}>New Rule</PrimaryButton>}
           </ListToolbar>
           <div className="space-y-6">
             {grouped.filter(g => g.rules.length > 0).map(g => (
@@ -80,9 +82,11 @@ const Doa: React.FC = () => {
       ) : (
         <>
           <ListToolbar title="Temporary Delegations" count={delegations.length}>
-            <PrimaryButton icon={<Icon name="plus" className="w-4 h-4" />} onClick={() => setDelModal({ id: '', fromEmployeeId: employees[0]?.id || '', toEmployeeId: employees[1]?.id || '', docTypes: [], fromDate: today(), toDate: today(), reason: '', active: true })}>
-              New Delegation
-            </PrimaryButton>
+            {canEdit && (
+              <PrimaryButton icon={<Icon name="plus" className="w-4 h-4" />} onClick={() => setDelModal({ id: '', fromEmployeeId: employees[0]?.id || '', toEmployeeId: employees[1]?.id || '', docTypes: [], fromDate: today(), toDate: today(), reason: '', active: true })}>
+                New Delegation
+              </PrimaryButton>
+            )}
           </ListToolbar>
           {delegations.length === 0 ? <EmptyState icon="users" title="No delegations configured" /> : (
             <TableCard>

@@ -1,6 +1,7 @@
 import { ApprovalDocType, ApprovalStep, AssetState, DocStatus, GatePassType, User } from '../types';
 import { canAct, currentStep } from './doa';
 import { daysFromToday } from './format';
+import { breachedOpenTickets, slaDueDate } from './sla';
 import { PageKey } from '../components/layout/nav';
 
 export interface PendingApprovalItem {
@@ -104,6 +105,19 @@ export const listAlerts = (state: AssetState): AlertItem[] => {
         page: 'gatePasses',
       });
     }
+  });
+
+  // Open service tickets that have missed their priority-based SLA. See lib/sla.ts.
+  breachedOpenTickets(state.serviceTickets).forEach(t => {
+    const days = daysFromToday(slaDueDate(t));
+    const over = Math.abs(days ?? 0);
+    alerts.push({
+      id: `sla-${t.id}`,
+      title: `${t.ticketNo} has breached its SLA`,
+      detail: `${t.priority} priority fault was due ${over} day${over === 1 ? '' : 's'} ago — ${t.faultDescription}`,
+      severity: 'critical',
+      page: 'serviceTickets',
+    });
   });
 
   return alerts;

@@ -10,9 +10,11 @@ import ApprovalChain from '../components/ui/ApprovalChain';
 import Icon from '../components/icons/Icon';
 import { formatCurrency, formatDate, daysFromToday, today } from '../lib/format';
 import { useToast } from '../components/ui/Toast';
+import { canEditModule, getCustomRole } from '../lib/permissions';
 
 const Amc: React.FC = () => {
-  const { state, currentUser, me, createAmcContract, actOnAmc, logAmcVisit, renewAmcContract } = useAssetStore();
+  const { state, currentUser, me, createAmcContract, actOnAmc, logAmcVisit, renewAmcContract, hasActiveDoaRules } = useAssetStore();
+  const canEdit = canEditModule(getCustomRole(currentUser, state.customRoles), 'amc');
   const showToast = useToast();
   const { amcContracts, assets, vendors } = state;
 
@@ -30,7 +32,7 @@ const Amc: React.FC = () => {
     <div>
       <ListToolbar title="AMC Contracts" count={filtered.length}>
         <FilterSelect value={statusFilter} onChange={setStatusFilter} options={[{ value: 'all', label: 'All statuses' }, ...Object.values(DocStatus).filter(s => amcContracts.some(c => c.status === s)).map(s => ({ value: s, label: s }))]} />
-        <PrimaryButton icon={<Icon name="plus" className="w-4 h-4" />} onClick={() => setNewOpen(true)}>New AMC Contract</PrimaryButton>
+        {canEdit && <PrimaryButton icon={<Icon name="plus" className="w-4 h-4" />} onClick={() => setNewOpen(true)}>New AMC Contract</PrimaryButton>}
       </ListToolbar>
 
       {filtered.length === 0 ? <EmptyState icon="shield" title="No AMC contracts" /> : (
@@ -125,7 +127,18 @@ const Amc: React.FC = () => {
           vendors={vendors}
           assets={assets}
           ownerId={me?.id || currentUser.id}
-          onSubmit={draft => { createAmcContract(draft); showToast('AMC contract drafted.'); setNewOpen(false); }}
+          onSubmit={draft => {
+            // AUDIT fix GOV-01 (extended to AMC Contracts): see Requisitions/PurchaseOrders for
+            // the original fix — a document type with zero configured DOA rules would otherwise
+            // auto-approve silently regardless of value.
+            if (!hasActiveDoaRules(ApprovalDocType.AmcContract)) {
+              showToast('No DOA approval rules exist for AMC Contracts yet. Ask your Superadmin to configure Governance → DOA Rules before this can be submitted.', 'error');
+              return;
+            }
+            createAmcContract(draft);
+            showToast('AMC contract drafted.');
+            setNewOpen(false);
+          }}
         />
       </Modal>
 

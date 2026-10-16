@@ -6,29 +6,51 @@ import { StatusBadge } from '../components/ui/Badge';
 import { Drawer, Modal } from '../components/ui/Overlay';
 import { Field, Input, Select, TextArea, PrimaryButton, SecondaryButton } from '../components/ui/FormControls';
 import { EmptyState } from '../components/ui/EmptyState';
+import BulkLabelSheet from '../components/ui/BulkLabelSheet';
 import Icon from '../components/icons/Icon';
 import { formatCurrency, formatDate, today } from '../lib/format';
 import { useToast } from '../components/ui/Toast';
+import { canEditModule, getCustomRole } from '../lib/permissions';
 import { PageKey } from '../components/layout/nav';
 
 const Grns: React.FC<{ onNavigate: (page: PageKey) => void }> = ({ onNavigate }) => {
-  const { state, currentUser, me, postGrn } = useAssetStore();
+  const { state, currentUser, me, postGrn, companyName, companyLogoUrl } = useAssetStore();
+  const canEdit = canEditModule(getCustomRole(currentUser, state.customRoles), 'grns');
   const showToast = useToast();
-  const { grns, purchaseOrders, vendors, locations, assets } = state;
+  const { grns, purchaseOrders, vendors, locations, assets, categories } = state;
 
   const [selected, setSelected] = useState<Grn | null>(null);
   const [newOpen, setNewOpen] = useState(false);
+  const [lastCreatedAssetIds, setLastCreatedAssetIds] = useState<string[]>([]);
+  const [showBulkLabel, setShowBulkLabel] = useState(false);
 
   const receivablePOs = purchaseOrders.filter(po => [DocStatus.Approved, DocStatus.PartiallyReceived].includes(po.status) && po.lines.some(l => l.receivedQty < l.quantity));
   const vendorName = (id: string) => vendors.find(v => v.id === id)?.name || '—';
 
+  const categoryMap = Object.fromEntries(categories.map(c => [c.id, c.name]));
+  const locationMap = Object.fromEntries(locations.map(l => [l.id, l.name]));
+  const lastCreatedAssets = assets.filter(a => lastCreatedAssetIds.includes(a.id));
+
   return (
     <div>
       <ListToolbar title="Goods Receipt Notes (GRN)" count={grns.length}>
-        <PrimaryButton icon={<Icon name="plus" className="w-4 h-4" />} disabled={receivablePOs.length === 0} onClick={() => setNewOpen(true)}>
-          Record Receipt
-        </PrimaryButton>
+        {canEdit && (
+          <PrimaryButton icon={<Icon name="plus" className="w-4 h-4" />} disabled={receivablePOs.length === 0} onClick={() => setNewOpen(true)}>
+            Record Receipt
+          </PrimaryButton>
+        )}
       </ListToolbar>
+
+      {/* Bulk label print sheet — shown after successful GRN */}
+      {showBulkLabel && lastCreatedAssets.length > 0 && (
+        <BulkLabelSheet
+          assets={lastCreatedAssets}
+          companyName={companyName || 'Your Company'}
+          companyLogoUrl={companyLogoUrl}
+          categoryMap={categoryMap}
+          locationMap={locationMap}
+        />
+      )}
 
       {grns.length === 0 ? <EmptyState icon="receipt" title="No goods received yet" /> : (
         <TableCard>
@@ -79,6 +101,16 @@ const Grns: React.FC<{ onNavigate: (page: PageKey) => void }> = ({ onNavigate })
                   return asset ? <button key={id} onClick={() => onNavigate('assets')} className="text-xs font-mono bg-slate-100 hover:bg-slate-200 rounded px-2 py-1">{asset.assetTag}</button> : null;
                 })}
               </div>
+              {/* Reprint labels from drawer */}
+              {selected.createdAssetIds.length > 0 && (
+                <BulkLabelSheet
+                  assets={assets.filter(a => selected.createdAssetIds.includes(a.id))}
+                  companyName={companyName || 'Your Company'}
+                  companyLogoUrl={companyLogoUrl}
+                  categoryMap={categoryMap}
+                  locationMap={locationMap}
+                />
+              )}
             </section>
           </>
         )}
@@ -90,10 +122,11 @@ const Grns: React.FC<{ onNavigate: (page: PageKey) => void }> = ({ onNavigate })
           locations={locations}
           defaultReceivedById={me?.id || currentUser.id}
           onSubmit={draft => {
-            postGrn(draft);
+            const { createdAssetIds } = postGrn(draft);
+            setLastCreatedAssetIds(createdAssetIds);
             showToast('GRN posted; assets added to the register.');
             setNewOpen(false);
-            onNavigate('assets');
+            setShowBulkLabel(true);
           }}
         />
       </Modal>
@@ -128,7 +161,15 @@ const NewGrnForm: React.FC<{
     <div className="space-y-4">
       <div className="grid grid-cols-2 gap-4">
         <Field label="Purchase Order" required>
-          <Select value={poId} onChange={e => { setPoId(e.target.value); setLineState({}); }}>
+          <Select value={poId} onChange={e => {
+            const nextPo = purchaseOrders.find(p => p.id === e.target.value);
+            setPoId(e.target.value);
+            setLineState({});
+            // Previously left showing whichever PO's delivery location was selected first, since
+            // nothing re-synced it when the PO changed. Only auto-fill it if the user hasn't
+            // already overridden it, so a deliberate manual choice still isn't clobbered.
+            if (nextPo && locationId === po?.deliverToLocationId) setLocationId(nextPo.deliverToLocationId || locations[0]?.id || '');
+          }}>
             {purchaseOrders.length === 0 && <option value="">No POs pending receipt</option>}
             {purchaseOrders.map(p => <option key={p.id} value={p.id}>{p.poNo}</option>)}
           </Select>

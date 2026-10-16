@@ -1,6 +1,6 @@
 import React, { useMemo, useState } from 'react';
 import { useAssetStore } from '../store/AssetStore';
-import { ApprovalDocType, ApprovalStatus, AssetStatus, DocStatus, LIVE_ASSET_STATUSES, Transfer, TransferType, UserRole } from '../types';
+import { ApprovalDocType, ApprovalStatus, AssetStatus, DocStatus, Transfer, TransferType, UserRole } from '../types';
 import { ListToolbar, TableCard, THead, Tr, Td, FilterSelect } from '../components/ui/Table';
 import { StatusBadge } from '../components/ui/Badge';
 import { Drawer, Modal } from '../components/ui/Overlay';
@@ -10,10 +10,12 @@ import ApprovalChain from '../components/ui/ApprovalChain';
 import Icon from '../components/icons/Icon';
 import { formatCurrency, formatDate, today } from '../lib/format';
 import { useToast } from '../components/ui/Toast';
+import { canEditModule, getCustomRole } from '../lib/permissions';
 import { PageKey } from '../components/layout/nav';
 
 const Transfers: React.FC<{ onNavigate: (page: PageKey) => void }> = ({ onNavigate }) => {
-  const { state, currentUser, me, createTransfer, actOnTransfer, dispatchTransfer, receiveTransfer } = useAssetStore();
+  const { state, currentUser, me, createTransfer, actOnTransfer, dispatchTransfer, receiveTransfer, hasActiveDoaRules } = useAssetStore();
+  const canEdit = canEditModule(getCustomRole(currentUser, state.customRoles), 'transfers');
   const showToast = useToast();
   const { transfers, assets, locations, departments, employees } = state;
 
@@ -32,7 +34,7 @@ const Transfers: React.FC<{ onNavigate: (page: PageKey) => void }> = ({ onNaviga
     <div>
       <ListToolbar title="Asset Transfers" count={filtered.length}>
         <FilterSelect value={statusFilter} onChange={setStatusFilter} options={[{ value: 'all', label: 'All statuses' }, ...Object.values(DocStatus).filter(s => transfers.some(t => t.status === s)).map(s => ({ value: s, label: s }))]} />
-        <PrimaryButton icon={<Icon name="plus" className="w-4 h-4" />} onClick={() => setNewOpen(true)}>New Transfer</PrimaryButton>
+        {canEdit && <PrimaryButton icon={<Icon name="plus" className="w-4 h-4" />} onClick={() => setNewOpen(true)}>New Transfer</PrimaryButton>}
       </ListToolbar>
 
       {filtered.length === 0 ? <EmptyState icon="swap" title="No transfers" /> : (
@@ -113,6 +115,13 @@ const Transfers: React.FC<{ onNavigate: (page: PageKey) => void }> = ({ onNaviga
           employees={employees}
           requesterId={me?.id || currentUser.id}
           onSubmit={draft => {
+            // AUDIT fix GOV-01 (extended to Transfers): see Requisitions/PurchaseOrders/Disposals
+            // for the original fix — a document type with zero configured DOA rules would
+            // otherwise auto-approve silently regardless of value.
+            if (!hasActiveDoaRules(ApprovalDocType.Transfer)) {
+              showToast('No DOA approval rules exist for Transfers yet. Ask your Superadmin to configure Governance → DOA Rules before this can be submitted.', 'error');
+              return;
+            }
             createTransfer(draft);
             showToast('Transfer request submitted.');
             setNewOpen(false);

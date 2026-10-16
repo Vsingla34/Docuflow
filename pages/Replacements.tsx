@@ -10,9 +10,11 @@ import ApprovalChain from '../components/ui/ApprovalChain';
 import Icon from '../components/icons/Icon';
 import { formatCurrency, formatDate, today } from '../lib/format';
 import { useToast } from '../components/ui/Toast';
+import { canEditModule, getCustomRole } from '../lib/permissions';
 
 const Replacements: React.FC = () => {
-  const { state, currentUser, me, createReplacement, actOnReplacement, completeReplacement } = useAssetStore();
+  const { state, currentUser, me, createReplacement, actOnReplacement, completeReplacement, hasActiveDoaRules } = useAssetStore();
+  const canEdit = canEditModule(getCustomRole(currentUser, state.customRoles), 'replacements');
   const showToast = useToast();
   const { replacements, assets, categories } = state;
 
@@ -29,7 +31,7 @@ const Replacements: React.FC = () => {
     <div>
       <ListToolbar title="Asset Replacements" count={filtered.length}>
         <FilterSelect value={statusFilter} onChange={setStatusFilter} options={[{ value: 'all', label: 'All statuses' }, ...Object.values(DocStatus).filter(s => replacements.some(r => r.status === s)).map(s => ({ value: s, label: s }))]} />
-        <PrimaryButton icon={<Icon name="plus" className="w-4 h-4" />} onClick={() => setNewOpen(true)}>New Replacement</PrimaryButton>
+        {canEdit && <PrimaryButton icon={<Icon name="plus" className="w-4 h-4" />} onClick={() => setNewOpen(true)}>New Replacement</PrimaryButton>}
       </ListToolbar>
 
       {filtered.length === 0 ? <EmptyState icon="swap" title="No replacement requests" /> : (
@@ -92,7 +94,18 @@ const Replacements: React.FC = () => {
         <NewReplacementForm
           assets={assets.filter(a => a.status !== AssetStatus.Sold && a.status !== AssetStatus.Scrapped && a.status !== AssetStatus.WrittenOff)}
           requesterId={me?.id || currentUser.id}
-          onSubmit={draft => { createReplacement(draft); showToast('Replacement request submitted.'); setNewOpen(false); }}
+          onSubmit={draft => {
+            // AUDIT fix GOV-01 (extended to Replacements): see Requisitions/PurchaseOrders for
+            // the original fix — a document type with zero configured DOA rules would otherwise
+            // auto-approve silently regardless of value.
+            if (!hasActiveDoaRules(ApprovalDocType.Replacement)) {
+              showToast('No DOA approval rules exist for Replacements yet. Ask your Superadmin to configure Governance → DOA Rules before this can be submitted.', 'error');
+              return;
+            }
+            createReplacement(draft);
+            showToast('Replacement request submitted.');
+            setNewOpen(false);
+          }}
         />
       </Modal>
 

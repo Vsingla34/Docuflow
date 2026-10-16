@@ -5,6 +5,8 @@ import { ListToolbar, TableCard, THead, Tr, Td } from '../components/ui/Table';
 import { Pill } from '../components/ui/Badge';
 import { Modal } from '../components/ui/Overlay';
 import { Field, Input, Select, TextArea, Checkbox, PrimaryButton, SecondaryButton, LinkButton } from '../components/ui/FormControls';
+import { CodeField } from '../components/ui/CodeField';
+import { TwoStepDeleteButton } from '../components/ui/TwoStepDeleteButton';
 import Icon from '../components/icons/Icon';
 import { uid } from '../lib/format';
 import { useToast } from '../components/ui/Toast';
@@ -16,7 +18,7 @@ const emptyVendor = (): Vendor => ({ id: '', code: '', name: '', gstin: '', cont
 const VENDOR_TONE: Record<VendorStatus, 'green' | 'red' | 'gray'> = { [VendorStatus.Active]: 'green', [VendorStatus.Blacklisted]: 'red', [VendorStatus.Inactive]: 'gray' };
 
 const Masters: React.FC = () => {
-  const { state, saveLocation, saveDepartment, saveVendor } = useAssetStore();
+  const { state, saveLocation, saveDepartment, saveVendor, deleteLocation, deleteVendor, deleteDepartment } = useAssetStore();
   const showToast = useToast();
   const { locations, departments, vendors, employees, assets } = state;
 
@@ -24,6 +26,25 @@ const Masters: React.FC = () => {
   const [locModal, setLocModal] = useState<AssetLocation | null>(null);
   const [deptModal, setDeptModal] = useState<Department | null>(null);
   const [venModal, setVenModal] = useState<Vendor | null>(null);
+
+  const handleDeleteLocation = async (l: AssetLocation) => {
+    if (!window.confirm(`Are you sure you want to delete location "${l.name}"?`)) return;
+    const res = await deleteLocation(l.id);
+    if (res.ok) showToast(`${l.name} deleted.`);
+    else showToast(res.error || 'Failed to delete location.', 'error');
+  };
+
+  const handleDeleteVendor = async (v: Vendor) => {
+    const res = await deleteVendor(v.id);
+    if (res.ok) showToast(`${v.name} deleted.`);
+    else showToast(res.error || 'Failed to delete vendor.', 'error');
+  };
+
+  const handleDeleteDepartment = async (d: Department) => {
+    const res = await deleteDepartment(d.id);
+    if (res.ok) showToast(`${d.name} deleted.`);
+    else showToast(res.error || 'Failed to delete department.', 'error');
+  };
 
   return (
     <div>
@@ -49,7 +70,12 @@ const Masters: React.FC = () => {
                   <Td>{l.city}, {l.state}</Td>
                   <Td className="text-text-light">{locations.find(p => p.id === l.parentId)?.name || '—'}</Td>
                   <Td>{assets.filter(a => a.locationId === l.id).length}</Td>
-                  <Td><LinkButton onClick={() => setLocModal(l)}>Edit</LinkButton></Td>
+                  <Td>
+                    <div className="flex gap-3">
+                      <LinkButton onClick={() => setLocModal(l)}>Edit</LinkButton>
+                      <button onClick={() => handleDeleteLocation(l)} className="text-red-500 hover:text-red-700 font-medium text-sm">Delete</button>
+                    </div>
+                  </Td>
                 </Tr>
               ))}
             </tbody>
@@ -73,7 +99,12 @@ const Masters: React.FC = () => {
                   <Td>{employees.find(e => e.id === d.headEmployeeId)?.name || '—'}</Td>
                   <Td>{employees.filter(e => e.departmentId === d.id).length}</Td>
                   <Td>{assets.filter(a => a.departmentId === d.id).length}</Td>
-                  <Td><LinkButton onClick={() => setDeptModal(d)}>Edit</LinkButton></Td>
+                  <Td>
+                    <div className="flex items-center gap-1">
+                      <LinkButton onClick={() => setDeptModal(d)}>Edit</LinkButton>
+                      <TwoStepDeleteButton iconOnly title="Delete department" onConfirm={() => handleDeleteDepartment(d)} />
+                    </div>
+                  </Td>
                 </Tr>
               ))}
             </tbody>
@@ -98,7 +129,12 @@ const Masters: React.FC = () => {
                   <Td>{v.isAmcPartner ? <Pill label="Yes" tone="green" /> : <Pill label="No" tone="gray" />}</Td>
                   <Td>★ {v.rating.toFixed(1)}</Td>
                   <Td><Pill label={v.status} tone={VENDOR_TONE[v.status]} /></Td>
-                  <Td><LinkButton onClick={() => setVenModal(v)}>Edit</LinkButton></Td>
+                  <Td>
+                    <div className="flex items-center gap-1">
+                      <LinkButton onClick={() => setVenModal(v)}>Edit</LinkButton>
+                      <TwoStepDeleteButton iconOnly title="Delete vendor" onConfirm={() => handleDeleteVendor(v)} />
+                    </div>
+                  </Td>
                 </Tr>
               ))}
             </tbody>
@@ -106,19 +142,19 @@ const Masters: React.FC = () => {
         </>
       )}
 
-      {locModal && <LocationModal location={locModal} locations={locations} onClose={() => setLocModal(null)} onSave={l => { saveLocation(l); showToast('Location saved.'); setLocModal(null); }} />}
-      {deptModal && <DepartmentModal department={deptModal} employees={employees} onClose={() => setDeptModal(null)} onSave={d => { saveDepartment(d); showToast('Department saved.'); setDeptModal(null); }} />}
-      {venModal && <VendorModal vendor={venModal} onClose={() => setVenModal(null)} onSave={v => { saveVendor(v); showToast('Vendor saved.'); setVenModal(null); }} />}
+      {locModal && <LocationModal location={locModal} locations={locations} numberingRule={state.numberingRules.location} onClose={() => setLocModal(null)} onSave={l => { saveLocation(l); showToast('Location saved.'); setLocModal(null); }} />}
+      {deptModal && <DepartmentModal department={deptModal} employees={employees} numberingRule={state.numberingRules.department} onClose={() => setDeptModal(null)} onSave={d => { saveDepartment(d); showToast('Department saved.'); setDeptModal(null); }} />}
+      {venModal && <VendorModal vendor={venModal} numberingRule={state.numberingRules.vendor} onClose={() => setVenModal(null)} onSave={v => { saveVendor(v); showToast('Vendor saved.'); setVenModal(null); }} />}
     </div>
   );
 };
 
-const LocationModal: React.FC<{ location: AssetLocation; locations: AssetLocation[]; onClose: () => void; onSave: (l: AssetLocation) => void }> = ({ location, locations, onClose, onSave }) => {
+const LocationModal: React.FC<{ location: AssetLocation; locations: AssetLocation[]; numberingRule?: import('../types').NumberingRule; onClose: () => void; onSave: (l: AssetLocation) => void }> = ({ location, locations, numberingRule, onClose, onSave }) => {
   const [form, setForm] = useState(location);
   return (
     <Modal isOpen onClose={onClose} title={location.id ? 'Edit Location' : 'New Location'} wide>
       <div className="grid grid-cols-2 gap-4">
-        <Field label="Code" required><Input value={form.code} onChange={e => setForm({ ...form, code: e.target.value.toUpperCase() })} /></Field>
+        <CodeField value={form.code} onChange={v => setForm({ ...form, code: v })} rule={numberingRule} isNew={!location.id} />
         <Field label="Name" required><Input value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} /></Field>
         <Field label="Type"><Select value={form.type} onChange={e => setForm({ ...form, type: e.target.value as LocationType })}>{Object.values(LocationType).map(t => <option key={t} value={t}>{t}</option>)}</Select></Field>
         <Field label="Parent Location"><Select value={form.parentId || ''} onChange={e => setForm({ ...form, parentId: e.target.value || undefined })}><option value="">None</option>{locations.filter(l => l.id !== form.id).map(l => <option key={l.id} value={l.id}>{l.name}</option>)}</Select></Field>
@@ -131,12 +167,12 @@ const LocationModal: React.FC<{ location: AssetLocation; locations: AssetLocatio
   );
 };
 
-const DepartmentModal: React.FC<{ department: Department; employees: { id: string; name: string }[]; onClose: () => void; onSave: (d: Department) => void }> = ({ department, employees, onClose, onSave }) => {
+const DepartmentModal: React.FC<{ department: Department; employees: { id: string; name: string }[]; numberingRule?: import('../types').NumberingRule; onClose: () => void; onSave: (d: Department) => void }> = ({ department, employees, numberingRule, onClose, onSave }) => {
   const [form, setForm] = useState(department);
   return (
     <Modal isOpen onClose={onClose} title={department.id ? 'Edit Department' : 'New Department'}>
       <div className="space-y-4">
-        <Field label="Code" required><Input value={form.code} onChange={e => setForm({ ...form, code: e.target.value.toUpperCase() })} /></Field>
+        <CodeField value={form.code} onChange={v => setForm({ ...form, code: v })} rule={numberingRule} isNew={!department.id} />
         <Field label="Name" required><Input value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} /></Field>
         <Field label="Cost Center"><Input value={form.costCenter} onChange={e => setForm({ ...form, costCenter: e.target.value })} /></Field>
         <Field label="Head"><Select value={form.headEmployeeId || ''} onChange={e => setForm({ ...form, headEmployeeId: e.target.value || undefined })}><option value="">None</option>{employees.map(e => <option key={e.id} value={e.id}>{e.name}</option>)}</Select></Field>
@@ -146,13 +182,13 @@ const DepartmentModal: React.FC<{ department: Department; employees: { id: strin
   );
 };
 
-const VendorModal: React.FC<{ vendor: Vendor; onClose: () => void; onSave: (v: Vendor) => void }> = ({ vendor, onClose, onSave }) => {
+const VendorModal: React.FC<{ vendor: Vendor; numberingRule?: import('../types').NumberingRule; onClose: () => void; onSave: (v: Vendor) => void }> = ({ vendor, numberingRule, onClose, onSave }) => {
   const [form, setForm] = useState(vendor);
   const [servicesText, setServicesText] = useState(vendor.services.join(', '));
   return (
     <Modal isOpen onClose={onClose} title={vendor.id ? 'Edit Vendor' : 'New Vendor'} wide>
       <div className="grid grid-cols-2 gap-4">
-        <Field label="Code" required><Input value={form.code} onChange={e => setForm({ ...form, code: e.target.value.toUpperCase() })} /></Field>
+        <CodeField value={form.code} onChange={v => setForm({ ...form, code: v })} rule={numberingRule} isNew={!vendor.id} />
         <Field label="Name" required><Input value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} /></Field>
         <Field label="GSTIN"><Input value={form.gstin} onChange={e => setForm({ ...form, gstin: e.target.value })} /></Field>
         <Field label="Contact Person"><Input value={form.contactPerson} onChange={e => setForm({ ...form, contactPerson: e.target.value })} /></Field>
@@ -163,6 +199,15 @@ const VendorModal: React.FC<{ vendor: Vendor; onClose: () => void; onSave: (v: V
         <Field label="Status"><Select value={form.status} onChange={e => setForm({ ...form, status: e.target.value as VendorStatus })}>{Object.values(VendorStatus).map(s => <option key={s} value={s}>{s}</option>)}</Select></Field>
         <Field label="Rating (1-5)"><Input type="number" min={1} max={5} step={0.1} value={form.rating} onChange={e => setForm({ ...form, rating: Number(e.target.value) })} /></Field>
         <div className="col-span-2"><Checkbox label="Approved AMC service partner" checked={form.isAmcPartner} onChange={v => setForm({ ...form, isAmcPartner: v })} /></div>
+
+        <div className="col-span-2 border-t border-border pt-4">
+          <h4 className="text-sm font-semibold text-text-main mb-3">Bank Details <span className="font-normal text-text-light">(for settling PO / AMC payments — optional)</span></h4>
+          <div className="grid grid-cols-2 gap-4">
+            <Field label="Account Holder Name"><Input value={form.bankAccountName || ''} onChange={e => setForm({ ...form, bankAccountName: e.target.value })} /></Field>
+            <Field label="Account Number"><Input value={form.bankAccountNumber || ''} onChange={e => setForm({ ...form, bankAccountNumber: e.target.value })} /></Field>
+            <Field label="IFSC Code"><Input value={form.bankIfsc || ''} onChange={e => setForm({ ...form, bankIfsc: e.target.value.toUpperCase() })} /></Field>
+          </div>
+        </div>
       </div>
       <div className="flex justify-end gap-3 pt-5">
         <SecondaryButton onClick={onClose}>Cancel</SecondaryButton>

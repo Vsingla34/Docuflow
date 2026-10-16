@@ -5,6 +5,7 @@ import { AssetStatus, DocStatus, LIVE_ASSET_STATUSES } from '../types';
 import { StatCard } from '../components/ui/StatCard';
 import { EmptyState } from '../components/ui/EmptyState';
 import { listAlerts, myPendingApprovals } from '../lib/notifications';
+import { breachedOpenTickets } from '../lib/sla';
 import { formatCurrency, formatDate } from '../lib/format';
 import { totalBookValue } from '../lib/depreciation';
 import { PageKey } from '../components/layout/nav';
@@ -17,8 +18,20 @@ const Dashboard: React.FC<{ onNavigate: (page: PageKey) => void }> = ({ onNaviga
   const { assets, categories, requisitions, transfers, serviceTickets, amcContracts, disposals } = state;
 
   const liveAssets = assets.filter(a => LIVE_ASSET_STATUSES.includes(a.status));
-  const bookValue = totalBookValue(liveAssets);
+  const bookValue = totalBookValue(liveAssets, undefined, state.depreciationRateRules);
+  // AUDIT fix DASH-01 / ASSET-02: the "Assets in Service" KPI used to read liveAssets.length,
+  // which is every non-disposed asset (In Store + In Use + Under Repair + In Transit + Issued
+  // Out + Awaiting Disposal) — correct for a financial total like Net Book Value below, but not
+  // what "in service" means to someone reading the card. A tenant with 100 freshly registered,
+  // never-issued assets would show "100 in service" here when the true number is 0. These two
+  // narrower counts replace it and also surface the issuance backlog directly on the dashboard.
+  const inServiceAssets = assets.filter(a => a.status === AssetStatus.InUse);
+  const inStoreAssets = assets.filter(a => a.status === AssetStatus.InStore);
   const openTickets = serviceTickets.filter(t => [DocStatus.Open, DocStatus.InProgress, DocStatus.PendingApproval].includes(t.status));
+  // Week 2-4 backlog: service-ticket SLAs (see lib/sla.ts) — how many open tickets have already
+  // missed their priority-based response/resolution commitment, surfaced the same way the other
+  // "watch this" counts are.
+  const slaBreaches = breachedOpenTickets(serviceTickets);
   const activeAmc = amcContracts.filter(c => c.status === DocStatus.Active);
   const alerts = listAlerts(state);
   const myApprovals = myPendingApprovals(state, currentUser);
@@ -37,18 +50,23 @@ const Dashboard: React.FC<{ onNavigate: (page: PageKey) => void }> = ({ onNaviga
 
   return (
     <div className="space-y-6">
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <StatCard label="Assets in Service" value={liveAssets.length} icon="box" tone="blue" onClick={() => onNavigate('assets')} />
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
+        <StatCard label="Assets in Service" value={inServiceAssets.length} icon="box" tone="blue" onClick={() => onNavigate('assets')} hint="Issued and in active use" />
+        {/* AUDIT fix ASSET-01 companion: this card is the signal that should have caught the
+            issuance workflow being hard to find — a large In Store count alongside a near-zero
+            In Service count means assets are being registered but never issued. */}
+        <StatCard label="In Store (Unissued)" value={inStoreAssets.length} icon="box" tone="slate" onClick={() => onNavigate('assets')} hint="Registered but not yet issued" />
         <StatCard label="Net Book Value" value={formatCurrency(bookValue, true)} icon="tag" tone="green" hint="Across all live assets" />
         <StatCard label="Open Repairs" value={openTickets.length} icon="wrench" tone="amber" onClick={() => onNavigate('serviceTickets')} />
         <StatCard label="Awaiting Your Approval" value={myApprovals.length} icon="clipboard" tone="purple" onClick={() => myApprovals[0] && onNavigate(myApprovals[0].page)} />
       </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
         <StatCard label="Open Requisitions" value={requisitions.filter(r => r.status === DocStatus.PendingApproval).length} icon="clipboard" tone="slate" onClick={() => onNavigate('requisitions')} />
         <StatCard label="Transfers In Transit" value={transfers.filter(t => t.status === DocStatus.InTransit).length} icon="swap" tone="blue" onClick={() => onNavigate('transfers')} />
         <StatCard label="Active AMC Contracts" value={activeAmc.length} icon="shield" tone="green" onClick={() => onNavigate('amc')} />
         <StatCard label="Pending Disposals" value={disposals.filter(d => d.status === DocStatus.PendingApproval).length} icon="trash" tone="red" onClick={() => onNavigate('disposals')} />
+        <StatCard label="SLA Breaches" value={slaBreaches.length} icon="wrench" tone={slaBreaches.length > 0 ? 'red' : 'slate'} onClick={() => onNavigate('serviceTickets')} hint="Open tickets past their due date" />
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
